@@ -8,6 +8,12 @@ if (!process.env.JWT_SECRET) {
 
 const JWT_SECRET: string = process.env.JWT_SECRET;
 
+type AccessTokenPayload = {
+  sub: string; // userId
+  iat: number; // issued at time
+  exp: number; // expiration time
+};
+
 export function signAccessToken(userId: string): string {
   return sign(
     { sub: userId },
@@ -17,5 +23,7 @@ export function signAccessToken(userId: string): string {
 }
 
 export function verifyAccessToken(token: string): { sub: string; iat: number; exp: number } {
-  return verify(token, JWT_SECRET) as { sub: string; iat: number; exp: number };
+  const payload = verify(token, JWT_SECRET);
+  // jsonwebtoken.verify can return string | JwtPayload, so cast the type
+  return payload as AccessTokenPayload;
 }
