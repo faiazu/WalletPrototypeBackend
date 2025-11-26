@@ -5,6 +5,7 @@ import { prisma } from "./core/db.js";
 
 import { authRouter } from "./features/auth/authRoutes.js";
 import { userRouter } from "./features/user/userRoutes.js";
+import { walletRouter } from "./features/wallet/walletRoutes.js";
 
 dotenv.config();
 
@@ -28,6 +29,9 @@ export function createApp(): Application {
 
   // User routes (ex GET /user/me)
   app.use("/user", userRouter);
+
+  // Wallet routes (create/invite/join/get)
+  app.use("/wallet", walletRouter);
 
   return app;
 }

@@ -14,10 +14,14 @@ const bodySchema = z.object({
 router.post("/google", async (req: Request, res: Response) => {
   try {
     const { idToken } = bodySchema.parse(req.body);
+    // idToken is a JWT from Google (from OAuth / OpenID) 
+    // obtained on frontend via Google Sign-In
+    // raw ID token as idToken in POST body
 
     const result = await signInWithGoogle(idToken);
 
-    res.json(result);
+    return res.json(result);
+
   } catch (err: any) {
     console.error(err);
 

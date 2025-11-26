@@ -1,12 +1,6 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client"
-  output   = "./src/generated/prisma"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -15,10 +9,77 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  googleSub String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String          @id @default(uuid())
+  email          String          @unique
+  name           String?
+  googleId       String?         @unique
+  createdAt      DateTime        @default(now())
+  kycStatus      String?
+  ledgerAccounts LedgerAccount[]
+  walletsAdmin   Wallet[]        @relation("WalletAdmin")
+  memberships    WalletMember[]
 }
 
+model Wallet {
+  id                         String          @id @default(uuid())
+  name                       String
+  adminId                    String
+  createdAt                  DateTime        @default(now())
+  providerFinancialAccountId String?
+  cards                      Card[]
+  ledgerAccounts             LedgerAccount[]
+  admin                      User            @relation("WalletAdmin", fields: [adminId], references: [id])
+  walletBalance              WalletBalance?
+  members                    WalletMember[]
+}
+
+model WalletBalance {
+  id        String   @id @default(uuid())
+  walletId  String   @unique
+  amount    Int      @default(0)
+  updatedAt DateTime @default(now()) @updatedAt
+  wallet    Wallet   @relation(fields: [walletId], references: [id])
+}
+
+model WalletMember {
+  id       String   @id @default(uuid())
+  walletId String
+  userId   String
+  role     String
+  joinedAt DateTime @default(now())
+  user     User     @relation(fields: [userId], references: [id])
+  wallet   Wallet   @relation(fields: [walletId], references: [id])
+}
+
+model Card {
+  id             String  @id @default(uuid())
+  walletId       String
+  providerCardId String?
+  status         String  @default("inactive")
+  wallet         Wallet  @relation(fields: [walletId], references: [id])
+}
+
+model LedgerAccount {
+  id            String        @id @default(uuid())
+  walletId      String
+  userId        String?
+  type          String
+  balance       Int           @default(0)
+  createdAt     DateTime      @default(now())
+  user          User?         @relation(fields: [userId], references: [id])
+  wallet        Wallet        @relation(fields: [walletId], references: [id])
+  creditEntries LedgerEntry[] @relation("CreditRelation")
+  debitEntries  LedgerEntry[] @relation("DebitRelation")
+}
+
+model LedgerEntry {
+  id              String        @id @default(uuid())
+  transactionId   String
+  debitAccountId  String
+  creditAccountId String
+  amount          Int
+  timestamp       DateTime      @default(now())
+  metadata        Json?
+  creditAccount   LedgerAccount @relation("CreditRelation", fields: [creditAccountId], references: [id])
+  debitAccount    LedgerAccount @relation("DebitRelation", fields: [debitAccountId], references: [id])
+}

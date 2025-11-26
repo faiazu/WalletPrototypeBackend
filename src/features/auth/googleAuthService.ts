@@ -1,4 +1,4 @@
-import { OAuth2Client } from "google-auth-library";
+import { LoginTicket, OAuth2Client, type TokenPayload } from "google-auth-library";
 import { prisma } from "../../core/db.js";
 import { signAccessToken } from "../../core/jwt.js";
 
@@ -12,7 +12,7 @@ const googleClient: OAuth2Client = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 export async function signInWithGoogle(idToken: string) {
   // 1. Verify token with Google
-  const ticket = await googleClient.verifyIdToken({
+  const ticket: LoginTicket = await googleClient.verifyIdToken({
     idToken,
     audience: GOOGLE_CLIENT_ID,
   });
@@ -26,21 +26,21 @@ export async function signInWithGoogle(idToken: string) {
   console.log("Google ID token payload aud:", payload.aud);
   console.log("ENV GOOGLE_CLIENT_ID:", GOOGLE_CLIENT_ID);
 
-  const googleSub = payload.sub;
-  const email = payload.email;
+  const googleSub: string = payload.sub;
+  const email: string = payload.email;
 
   // 2. Upsert user in DB
   const user = await prisma.user.upsert({
-    where: { googleSub },
-    update: { email },
+    where: { googleId: googleSub },
+    update: { email: email },
     create: {
-      googleSub,
-      email,
+      googleId: googleSub,
+      email: email,
     },
   });
 
   // 3. Issue your app's JWT
-  const token = signAccessToken(user.id);
+  const token: string = signAccessToken(user.id);
 
   return {
     user: {
