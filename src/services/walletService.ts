@@ -1,70 +1,87 @@
-import { randomUUID } from "crypto";
 import { prisma } from "../core/db.js";
-import type { Wallet } from "../generated/prisma/client.js";
-import { initializeLedgerForWallet, type LedgerInitializationResult } from "./ledgerService.js";
+import { initializeLedgerForWallet } from "./ledger/initLedger.js";
 
-type CreateWalletInput = {
-  name: string;
-  adminId: string;
-};
+export const walletService = {
 
-export type CreateWalletResult = { wallet: Wallet; ledger: LedgerInitializationResult };
+  //
+  // CREATE WALLET 
+  // - atomic operation that
+  // - creates wallet
+  // - adds admin as member
+  // - initializes ledger (pool + admin equity)
+  //
+  async createWallet({
+    name,
+    adminUserId
+  }: {
+    name: string;
+    adminUserId: string;
+  }) {
 
-export async function createWallet(data: CreateWalletInput): Promise<CreateWalletResult> {
-  const wallet = await prisma.wallet.create({
-    data: {
-      name: data.name,
-      adminId: data.adminId,
-      walletBalance: {
-        create: {
-          id: randomUUID(),
-          amount: 0,
+    return prisma.$transaction(async (tx) => {
+
+      // 1. Create wallet
+      const wallet = await tx.wallet.create({
+        data: {
+          name,
+          adminId: adminUserId
+        }
+      });
+
+      // 2. Add admin as member
+      await tx.walletMember.create({
+        data: {
+          walletId: wallet.id,
+          userId: adminUserId,
+          role: "admin"
+        }
+      });
+
+      // 3. Initialize ledger accounts
+      const ledger = await initializeLedgerForWallet(wallet.id, adminUserId);
+
+      return {
+        wallet,
+        ledger
+      };
+    });
+  },
+
+  //
+  // GET WALLET
+  //
+  async getWalletById(walletId: string) {
+    return prisma.wallet.findUnique({
+      where: { id: walletId }
+    });
+  },
+
+  //
+  // GET WALLET DETAILS (with membership & equity)
+  //
+  async getWalletDetails(walletId: string) {
+    const wallet = await prisma.wallet.findUnique({
+      where: { id: walletId },
+      include: {
+        members: {
+          include: { user: true }
         },
-      },
-    },
-  });
+        ledgerAccounts: true
+      }
+    });
 
-  const ledger = await initializeLedgerForWallet(wallet.id, data.adminId);
+    return wallet;
+  },
 
-  return { wallet, ledger };
-}
+  //
+  // ADMIN CHECK
+  //
+  async isWalletAdmin(walletId: string, userId: string) {
+    const wallet = await prisma.wallet.findUnique({
+      where: { id: walletId }
+    });
 
-export async function getWalletById(id: string): Promise<Wallet | null> {
-  return prisma.wallet.findUnique({ where: { id } });
-}
-
-export async function requireWallet(id: string): Promise<Wallet> {
-  const wallet = await getWalletById(id);
-  if (!wallet) {
-    throw new Error("Wallet not found");
+    if (!wallet) return false;
+    return wallet.adminId === userId;
   }
-  return wallet;
-}
-
-export async function isWalletAdmin(walletId: string, userId: string): Promise<boolean> {
-  const wallet = await prisma.wallet.findUnique({
-    where: { id: walletId },
-    select: { adminId: true },
-  });
-
-  return wallet?.adminId === userId;
-}
-
-export async function getWalletDetails(walletId: string) {
-  return prisma.wallet.findUnique({
-    where: { id: walletId },
-    include: {
-      walletBalance: true,
-      members: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              email: true,
-            },
-          },
-        },
-      },
-    },
-  });
-}
+};

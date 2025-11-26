@@ -5,155 +5,132 @@ import { authMiddleware } from "../../core/authMiddleware.js";
 import { addMember, isMember } from "../../services/memberService.js";
 import { requireUserByEmail } from "../../services/userService.js";
 import {
-  createWallet,
-  getWalletDetails,
-  getWalletById,
-  isWalletAdmin,
+  walletService,
 } from "../../services/walletService.js";
 
 const router = express.Router();
 
+//
+// Validation
+//
 const createWalletSchema = z.object({
   name: z.string().min(1, "Wallet name is required"),
 });
 
 const inviteSchema = z.object({
   email: z.email(),
-  role: z.string().min(1).optional(),
+  role: z.string().optional(),
 });
 
+//
+// CREATE WALLET
+//
 router.post("/create", authMiddleware, async (req, res) => {
   try {
-    if (!req.userId) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    const userId = req.userId as string;
-
+    const userId = req.userId!;
     const { name } = createWalletSchema.parse(req.body);
 
-    const { wallet, ledger } = await createWallet({ name, adminId: userId });
+    const result = await walletService.createWallet({
+      name,
+      adminUserId: userId
+    });
 
-    // Ensure the creator is also recorded as a member with an admin role
-    await addMember(wallet.id, userId, "admin");
+    return res.status(201).json(result);
 
-    return res.status(201).json({ wallet, ledger });
   } catch (err: any) {
-    if (err.name === "ZodError") {
-      return res.status(400).json({ error: "Invalid request body", details: err.errors });
-    }
-
     console.error("Error creating wallet:", err);
-    return res.status(400).json({ error: err.message ?? "Failed to create wallet" });
+
+    if (err.name === "ZodError")
+      return res.status(400).json({ error: "Invalid request body", details: err.errors });
+
+    return res.status(400).json({ error: err.message || "Failed to create wallet" });
   }
 });
 
+//
+// INVITE MEMBER
+//
 router.post("/:id/invite", authMiddleware, async (req, res) => {
   try {
-    if (!req.userId) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
+    const userId: string = req.userId!;
+    const walletId: string = req.params.id!;
 
-    const userId = req.userId as string;
-
-    const walletId = req.params.id ?? "";
-    if (!walletId) {
-      return res.status(400).json({ error: "Wallet id is required" });
-    }
     const { email, role } = inviteSchema.parse(req.body);
 
-    const wallet = await getWalletById(walletId);
-    if (!wallet) {
-      return res.status(404).json({ error: "Wallet not found" });
-    }
+    const wallet = await walletService.getWalletById(walletId);
+    if (!wallet) return res.status(404).json({ error: "Wallet not found" });
 
-    if (wallet.adminId !== userId) {
-      return res.status(403).json({ error: "Only the wallet admin can invite members" });
-    }
+    // permission check
+    if (wallet.adminId !== userId)
+      return res.status(403).json({ error: "Only admin can invite members" });
 
     const invitee = await requireUserByEmail(email);
 
-    if (await isMember(walletId, invitee.id)) {
-      return res.status(400).json({ error: "User is already a member of this wallet" });
-    }
+    if (await isMember(walletId, invitee.id))
+      return res.status(400).json({ error: "User already a member" });
 
-    const member = await addMember(walletId, invitee.id, role ?? "member");
+    const member = await addMember(walletId, invitee.id, role || "member");
 
     return res.status(201).json({ member });
+
   } catch (err: any) {
+    console.error("Error inviting member:", err);
     if (err.name === "ZodError") {
       return res.status(400).json({ error: "Invalid request body", details: err.errors });
     }
 
-    if (err.message === "User not found") {
-      return res.status(404).json({ error: err.message });
-    }
-
-    console.error("Error inviting member:", err);
-    return res.status(400).json({ error: err.message ?? "Failed to invite member" });
+    return res.status(400).json({ error: err.message || "Failed to invite member" });
   }
 });
 
+//
+// JOIN WALLET
+//
 router.post("/:id/join", authMiddleware, async (req, res) => {
   try {
-    if (!req.userId) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
+    const userId = req.userId!;
+    const walletId = req.params.id!;
 
-    const userId = req.userId as string;
+    const wallet = await walletService.getWalletById(walletId);
+    if (!wallet) return res.status(404).json({ error: "Wallet not found" });
 
-    const walletId = req.params.id ?? "";
-    if (!walletId) {
-      return res.status(400).json({ error: "Wallet id is required" });
-    }
-    const wallet = await getWalletById(walletId);
-    if (!wallet) {
-      return res.status(404).json({ error: "Wallet not found" });
-    }
-
-    if (await isMember(walletId, userId)) {
-      return res.status(400).json({ error: "Already a member of this wallet" });
-    }
+    if (await isMember(walletId, userId))
+      return res.status(400).json({ error: "Already a member" });
 
     const member = await addMember(walletId, userId, "member");
 
     return res.status(201).json({ member });
+
   } catch (err: any) {
     console.error("Error joining wallet:", err);
-    return res.status(400).json({ error: err.message ?? "Failed to join wallet" });
+    return res.status(400).json({ error: err.message || "Failed to join wallet" });
   }
 });
 
+//
+// GET WALLET DETAILS
+//
 router.get("/:id", authMiddleware, async (req, res) => {
   try {
-    if (!req.userId) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
+    const userId = req.userId!;
+    const walletId = req.params.id!;
 
-    const userId = req.userId as string;
+    const wallet = await walletService.getWalletDetails(walletId);
+    if (!wallet) return res.status(404).json({ error: "Wallet not found" });
 
-    const walletId = req.params.id ?? "";
-    if (!walletId) {
-      return res.status(400).json({ error: "Wallet id is required" });
-    }
-    const wallet = await getWalletDetails(walletId);
-
-    if (!wallet) {
-      return res.status(404).json({ error: "Wallet not found" });
-    }
-
-    const isAdmin = await isWalletAdmin(walletId, userId);
+    // check membership or admin
+    const admin = await walletService.isWalletAdmin(walletId, userId);
     const member = await isMember(walletId, userId);
-
-    if (!isAdmin && !member) {
+    if (!admin && !member)
       return res.status(403).json({ error: "Access denied" });
-    }
 
     return res.json({ wallet });
+
   } catch (err: any) {
     console.error("Error fetching wallet:", err);
-    return res.status(400).json({ error: err.message ?? "Failed to fetch wallet" });
+    return res.status(400).json({ error: err.message || "Failed to fetch wallet" });
   }
 });
 
 export { router as walletRouter };
+
