@@ -39,6 +39,12 @@ export const ledgerService = {
     return account;
   },
 
+  async getWalletLedgerAccounts(walletId: string) {
+    return prisma.ledgerAccount.findMany({
+      where: { walletId: walletId }
+    });
+  },
+
   //
   // POST DEPOSIT
   // Debit: wallet_pool
