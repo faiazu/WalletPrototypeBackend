@@ -1,12 +1,12 @@
 import express from "express";
 import { z } from "zod";
 
-import { authMiddleware } from "../../core/authMiddleware.js";
-import { addMember, isMember } from "../../services/memberService.js";
-import { requireUserByEmail } from "../../services/userService.js";
+import { authMiddleware } from "../core/authMiddleware.js";
+import { addMember, isMember } from "../services/memberService.js";
+import { requireUserByEmail } from "../services/userService.js";
 import {
   walletService,
-} from "../../services/walletService.js";
+} from "../services/walletService.js";
 
 const router = express.Router();
 
@@ -133,4 +133,3 @@ router.get("/:id", authMiddleware, async (req, res) => {
 });
 
 export { router as walletRouter };
-

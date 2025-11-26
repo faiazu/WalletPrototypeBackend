@@ -1,6 +1,6 @@
 import { LoginTicket, OAuth2Client, type TokenPayload } from "google-auth-library";
-import { prisma } from "../../core/db.js";
-import { signAccessToken } from "../../core/jwt.js";
+import { prisma } from "../core/db.js";
+import { signAccessToken } from "../core/jwt.js";
 
 if (!process.env.GOOGLE_CLIENT_ID) {
   throw new Error("Missing GOOGLE_CLIENT_ID in environment");

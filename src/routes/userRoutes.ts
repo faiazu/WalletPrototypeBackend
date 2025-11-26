@@ -1,15 +1,15 @@
 import express from "express";
-import { prisma } from "../../core/db.js";
-import { authMiddleware } from "../../core/authMiddleware.js";
+import { prisma } from "../core/db.js";
+import { authMiddleware } from "../core/authMiddleware.js";
 
 const router = express.Router();
 
-/**
- * GET /me
- * - Requires Authorization: Bearer <token>
- * - Uses req.userId set by authMiddleware
- * - Returns { id, email } of the current user
- */
+/*
+ GET /me
+ - Requires Authorization: Bearer <token>
+ - Uses req.userId set by authMiddleware
+ - Returns { id, email } of the current user
+*/
 router.get("/me", authMiddleware, async (req, res) => {
   const userId = req.userId;
 

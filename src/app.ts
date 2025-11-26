@@ -3,9 +3,9 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { prisma } from "./core/db.js";
 
-import { authRouter } from "./features/auth/authRoutes.js";
-import { userRouter } from "./features/user/userRoutes.js";
-import { walletRouter } from "./features/wallet/walletRoutes.js";
+import { authRouter } from "./routes/authRoutes.js";
+import { userRouter } from "./routes/userRoutes.js";
+import { walletRouter } from "./routes/walletRoutes.js";
 
 dotenv.config();
 
@@ -32,6 +32,11 @@ export function createApp(): Application {
 
   // Wallet routes (create/invite/join/get)
   app.use("/wallet", walletRouter);
+
+  if (process.env.NODE_ENV !== "production") {
+    // app.use("/test/ledger", mockLedgerRoutes);
+  }
+
 
   return app;
 }
