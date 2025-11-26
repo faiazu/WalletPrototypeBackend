@@ -5,13 +5,13 @@ import { ledgerService } from "../../../services/ledger/ledgerService.js";
 /**
  * Dumps all ledger accounts for a wallet.
  * Usage:
- *   npx ts-node src/tests/scripts/ledger/inspectLedger.ts <WALLET_ID>
+ *   npx tsx src/tests/scripts/ledger/inspectLedger.ts <WALLET_ID>
  */
 async function main() {
   const [walletId] = process.argv.slice(2);
 
   if (!walletId) {
-    console.error("Usage: ts-node src/tests/scripts/ledger/inspectLedger.ts <WALLET_ID>");
+    console.error("Usage: tsx src/tests/scripts/ledger/inspectLedger.ts <WALLET_ID>");
     process.exit(1);
   }
 

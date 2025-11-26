@@ -5,7 +5,7 @@ import { cliRequest } from "../../helpers/cliHelper.js";
 /**
  * Lists all users via dev mock route.
  * Usage:
- *   npx ts-node src/tests/scripts/users/listUsers.ts
+ *   npx tsx src/tests/scripts/users/listUsers.ts
  */
 async function main() {
   const result = await cliRequest(

@@ -5,13 +5,13 @@ import { cliRequest } from "../../helpers/cliHelper.js";
 /**
  * Deposits funds into a wallet using the MOCK deposit route.
  * Usage:
- *   npx ts-node src/tests/scripts/ledger/deposit.ts <TOKEN> <WALLET_ID> <AMOUNT>
+ *   npx tsx src/tests/scripts/ledger/deposit.ts <TOKEN> <WALLET_ID> <AMOUNT>
  */
 async function main() {
     const [token, walletId, amountStr] = process.argv.slice(2);
 
     if (!token || !walletId || !amountStr) {
-        console.error("Usage: ts-node src/tests/scripts/ledger/deposit.ts <TOKEN> <WALLET_ID> <AMOUNT>");
+        console.error("Usage: tsx src/tests/scripts/ledger/deposit.ts <TOKEN> <WALLET_ID> <AMOUNT>");
         process.exit(1);
     }
 

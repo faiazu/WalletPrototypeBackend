@@ -5,13 +5,13 @@ import { cliRequest } from "../../helpers/cliHelper.js";
 /**
  * Authenticated user joins an existing wallet.
  * Usage:
- *   npx ts-node src/tests/scripts/wallets/joinWallet.ts <TOKEN> <WALLET_ID>
+ *   npx tsx src/tests/scripts/wallets/joinWallet.ts <TOKEN> <WALLET_ID>
  */
 async function main() {
   const [token, walletId] = process.argv.slice(2);
 
   if (!token || !walletId) {
-    console.error("Usage: ts-node src/tests/scripts/wallets/joinWallet.ts <TOKEN> <WALLET_ID>");
+    console.error("Usage: tsx src/tests/scripts/wallets/joinWallet.ts <TOKEN> <WALLET_ID>");
     process.exit(1);
   }
 

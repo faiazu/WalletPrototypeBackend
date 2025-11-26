@@ -3,13 +3,13 @@ import { cliRequest } from "../../helpers/cliHelper.js";
 /**
  * Logs in (mock) and returns a JWT token.
  * Usage:
- *   npx ts-node src/tests/scripts/users/loginUser.ts test@example.com
+ *   npx tsx src/tests/scripts/users/loginUser.ts test@example.com
  */
 async function main() {
   const [email] = process.argv.slice(2);
 
   if (!email) {
-    console.error("Usage: ts-node src/tests/scripts/users/loginUser.ts <EMAIL>");
+    console.error("Usage: tsx src/tests/scripts/users/loginUser.ts <EMAIL>");
     process.exit(1);
   }
 

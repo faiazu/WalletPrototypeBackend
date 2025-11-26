@@ -5,13 +5,13 @@ import { cliRequest } from "../../helpers/cliHelper.js";
 /**
  * Creates a user via dev mock route.
  * Usage:
- *   npx ts-node src/tests/scripts/users/createUser.ts test@example.com "Test User"
+ *   npx tsx src/tests/scripts/users/createUser.ts test@example.com "Test User"
  */
 async function main() {
   const [email, name] = process.argv.slice(2);
 
   if (!email || !name) {
-    console.error('Usage: ts-node src/tests/scripts/users/createUser.ts <EMAIL> "<NAME>"');
+    console.error('Usage: tsx src/tests/scripts/users/createUser.ts <EMAIL> "<NAME>"');
     process.exit(1);
   }
 

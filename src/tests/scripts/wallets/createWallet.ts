@@ -5,13 +5,13 @@ import { cliRequest } from "../../helpers/cliHelper.js";
 /**
  * Creates a wallet for the authenticated user.
  * Usage:
- *   npx ts-node src/tests/scripts/wallets/createWallet.ts <TOKEN> "Trip Wallet"
+ *   npx tsx src/tests/scripts/wallets/createWallet.ts <TOKEN> "Trip Wallet"
  */
 async function main() {
   const [token, name] = process.argv.slice(2);
 
   if (!token || !name) {
-    console.error('Usage: ts-node src/tests/scripts/wallets/createWallet.ts <TOKEN> "<WALLET_NAME>"');
+    console.error('Usage: tsx src/tests/scripts/wallets/createWallet.ts <TOKEN> "<WALLET_NAME>"');
     process.exit(1);
   }
 
