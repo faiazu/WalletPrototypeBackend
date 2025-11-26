@@ -18,17 +18,22 @@ export async function requireUserByEmail(email: string): Promise<User> {
 }
 
 // Ensures a user exists with the given email; creates one if not found
-export async function ensureUserByEmail(email: string, name: string): Promise<User> {
+export async function ensureUserByEmail(email: string, name?: string): Promise<User> {
   let user: User | null = await prisma.user.findUnique({ where: { email } });
 
   if (!user) {
     user = await prisma.user.create({
       data: {
         email: email,
-        name: name,
+        name: name ?? null,
       },
     });
   }
 
   return user;
+}
+
+// List all users (for testing purposes)
+export async function listUsers() {
+  return prisma.user.findMany();
 }

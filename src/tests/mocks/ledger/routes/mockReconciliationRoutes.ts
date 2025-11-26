@@ -13,6 +13,7 @@ const paramsSchema = z.object({
   walletId: z.string().min(1),
 });
 
+// GET /test/ledger/reconciliation/:walletId
 router.get(
   "/:walletId",
   authMiddleware,
@@ -34,7 +35,8 @@ router.get(
 
       return res.json(result);
 
-    } catch (err: unknown) {
+    } 
+    catch (err: unknown) {
       console.error("Reconciliation error:", err);
 
       if (err instanceof z.ZodError) {
