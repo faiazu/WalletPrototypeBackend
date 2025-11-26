@@ -12,38 +12,41 @@ export const walletService = {
   //
   async createWallet({
     name,
-    adminUserId
+    adminUserId,
   }: {
     name: string;
     adminUserId: string;
   }) {
-
     return prisma.$transaction(async (tx) => {
+      console.log(
+        `💡 Starting transaction to create wallet "${name}" with admin user ID ${adminUserId}`
+      );
 
-      // 1. Create wallet
       const wallet = await tx.wallet.create({
         data: {
           name,
-          adminId: adminUserId
-        }
+          adminId: adminUserId,
+        },
       });
 
-      // 2. Add admin as member
+      console.log(`💡 Wallet created with ID ${wallet.id}`);
+
       await tx.walletMember.create({
         data: {
           walletId: wallet.id,
           userId: adminUserId,
-          role: "admin"
-        }
+          role: "admin",
+        },
       });
 
-      // 3. Initialize ledger accounts
-      const ledger = await initializeLedgerForWallet(wallet.id, adminUserId);
+      console.log(
+        `💡 Admin user ID ${adminUserId} added as member to wallet ID ${wallet.id}`
+      );
 
-      return {
-        wallet,
-        ledger
-      };
+      // 🔥 pass the transaction client here
+      const ledger = await initializeLedgerForWallet(tx, wallet.id, adminUserId);
+
+      return { wallet, ledger };
     });
   },
 

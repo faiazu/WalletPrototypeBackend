@@ -30,10 +30,14 @@ router.post("/create", authMiddleware, async (req, res) => {
     const userId = req.userId!;
     const { name } = createWalletSchema.parse(req.body);
 
+    console.log(`💡 Creating wallet "${name}" for user ${userId}`);
+
     const result = await walletService.createWallet({
-      name,
+      name: name,
       adminUserId: userId
     });
+
+    console.log(`💡 Wallet "${name}" created with ID ${result.wallet.id}`);
 
     return res.status(201).json(result);
 
