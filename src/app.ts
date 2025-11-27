@@ -8,6 +8,7 @@ import { userRouter } from "./routes/userRoutes.js";
 import { walletRouter } from "./routes/walletRoutes.js";
 import { cardRouter } from "./routes/cardRoutes.js";
 import { baasWebhookRouter } from "./routes/baasWebhookRoutes.js";
+import { ledgerRouter } from "./routes/ledgerRoutes.js";
 
 // Mock ledger routes for testing
 import { mockLedger } from "./tests/mocks/ledger/mockLedgerIndex.js";
@@ -38,6 +39,9 @@ export function createApp(): Application {
 
   // Wallet routes (create/invite/join/get)
   app.use("/wallet", walletRouter);
+
+  // Ledger routes (real, non-mock)
+  app.use("/ledger", ledgerRouter);
 
   // Card routes (create cards for users)
   app.use("/", cardRouter);
