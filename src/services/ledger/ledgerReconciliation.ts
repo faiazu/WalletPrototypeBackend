@@ -53,14 +53,18 @@ export class LedgerReconciliationService {
       },
     });
 
-    // 3. Sum balances
+    // 3. Sum balances (member equity holds positive amounts; pool is currently negative)
     const sumOfMemberEquity = memberEquityAccounts.reduce(
       (sum, acc) => sum + acc.balance,
       0
     );
 
-    // 4. Verify consistency
-    const consistent = sumOfMemberEquity === poolAccount.balance;
+    // 4. Verify consistency.
+    // Sign convention today:
+    //  - pool balance is negative (debited on deposits)
+    //  - member equity is positive
+    // The ledger is consistent when they net to zero.
+    const consistent = sumOfMemberEquity + poolAccount.balance === 0;
 
     // 5. Build result
     const result: LedgerReconciliationResult = {
