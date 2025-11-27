@@ -62,6 +62,7 @@ async function registerAndLogin(user: { email: string; name: string }) {
 
 async function dumpLedgerAccounts(walletId: string, label: string) {
   const accounts: LedgerAccount[] = await ledgerService.getWalletLedgerAccounts(walletId);
+  const display = await ledgerService.getWalletDisplayBalances(walletId);
   logStep(
     `   -> Ledger accounts (${label}): ${JSON.stringify(
       accounts.map((a) => ({
@@ -73,6 +74,9 @@ async function dumpLedgerAccounts(walletId: string, label: string) {
       null,
       2
     )}`
+  );
+  logStep(
+    `   -> Display balances (${label}): ${JSON.stringify(display, null, 2)}`
   );
 }
 

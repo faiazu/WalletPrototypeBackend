@@ -46,6 +46,31 @@ export const ledgerService = {
     });
   },
 
+  /**
+   * Human-friendly balances (credit-normal storage -> display as positive pool).
+   *
+   * Pool is stored as a liability (credits increase), so we negate it for display.
+   * Member equity is already positive in storage, so we keep it as-is.
+   */
+  async getWalletDisplayBalances(walletId: string): Promise<{
+    poolDisplay: number;
+    memberEquity: Array<{ userId: string; balance: number }>;
+  }> {
+    const pool = await this.getWalletPoolAccount(walletId);
+    const equityAccounts = await prisma.ledgerAccount.findMany({
+      where: { walletId, type: "member_equity" },
+      orderBy: { createdAt: "asc" },
+    });
+
+    return {
+      poolDisplay: -pool.balance,
+      memberEquity: equityAccounts.map((acc) => ({
+        userId: acc.userId!,
+        balance: acc.balance,
+      })),
+    };
+  },
+
   // get wallet_pool balance
   async getWalletPoolBalance(walletId: string): Promise<number> {
     const pool: LedgerAccount = await this.getWalletPoolAccount(walletId);
