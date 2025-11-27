@@ -8,6 +8,14 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum BaasProviderName {
+  MOCK
+  STRIPE_ISSUING
+  LITHIC
+  UNIT
+  OTHER
+}
+
 model User {
   id             String          @id @default(uuid())
   email          String          @unique
@@ -18,6 +26,8 @@ model User {
   ledgerAccounts LedgerAccount[]
   walletsAdmin   Wallet[]        @relation("WalletAdmin")
   memberships    WalletMember[]
+  baasCustomer   BaasCustomer?
+  baasCards      BaasCard[]
 }
 
 model Wallet {
@@ -31,6 +41,7 @@ model Wallet {
   admin                      User            @relation("WalletAdmin", fields: [adminId], references: [id])
   walletBalance              WalletBalance?
   members                    WalletMember[]
+  baasCards                  BaasCard[]
 }
 
 model WalletBalance {
@@ -82,4 +93,33 @@ model LedgerEntry {
   metadata        Json?
   creditAccount   LedgerAccount @relation("CreditRelation", fields: [creditAccountId], references: [id])
   debitAccount    LedgerAccount @relation("DebitRelation", fields: [debitAccountId], references: [id])
+}
+
+model BaasCustomer {
+  id                 String           @id @default(cuid())
+  userId             String           @unique
+  providerName       BaasProviderName
+  externalCustomerId String           @unique
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  user  User       @relation(fields: [userId], references: [id])
+  cards BaasCard[]
+}
+
+model BaasCard {
+  id             String           @id @default(cuid())
+  userId         String
+  walletId       String? // optional link to a "default" wallet for this card
+  providerName   BaasProviderName
+  externalCardId String           @unique
+  last4          String?
+  status         String           @default("ACTIVE")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  user           User          @relation(fields: [userId], references: [id])
+  wallet         Wallet?       @relation(fields: [walletId], references: [id])
+  baasCustomer   BaasCustomer? @relation(fields: [baasCustomerId], references: [id])
+  baasCustomerId String?
 }
