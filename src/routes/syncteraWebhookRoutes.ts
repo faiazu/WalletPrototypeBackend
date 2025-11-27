@@ -1,5 +1,6 @@
 import express from "express";
 
+import { Debugger } from "../core/debugger.js";
 import { baasWebhookService } from "../core/dependencies.js";
 import { syncteraWebhookAdapter } from "../services/baas/adapters/syncteraWebhookAdapter.js";
 
@@ -14,42 +15,20 @@ router.use(
 
 router.post("/", async (req, res) => {
   try {
-    // Debug: log raw payload as a string to inspect mapping issues
-    try {
-      const rawString = Buffer.isBuffer(req.body)
-        ? req.body.toString()
-        : typeof req.body === "string"
-        ? req.body
-        : JSON.stringify(req.body);
+    const event = syncteraWebhookAdapter.normalizeEvent(req);
 
-      const parsed = JSON.parse(rawString);
+    // Concise log; toggle detailed payload logging with SYNCTERA_WEBHOOK_DEBUG=true
+    const personId = "personId" in event ? (event as any).personId : "n/a";
+    const verificationStatus =
+      "verificationStatus" in event ? (event as any).verificationStatus : "n/a";
+    Debugger.logInfo(
+      `[SyncteraWebhook] type=${event.type}, providerEventId=${event.providerEventId}, personId=${personId}, verificationStatus=${verificationStatus}`
+    );
 
-      if (typeof parsed?.event_resource === "string") {
-        try {
-          parsed.event_resource = JSON.parse(parsed.event_resource);
-        } catch {
-          // leave as string
-        }
-      }
-      if (typeof parsed?.event_resource_changed_fields === "string") {
-        try {
-          parsed.event_resource_changed_fields = JSON.parse(parsed.event_resource_changed_fields);
-        } catch {
-          // leave as string
-        }
-      }
-
-      console.log("[SyncteraWebhook] Raw payload:", JSON.stringify(parsed, null, 2));
-    } catch {
-      const rawFallback = Buffer.isBuffer(req.body)
-        ? req.body.toString()
-        : typeof req.body === "string"
-        ? req.body
-        : JSON.stringify(req.body);
-      console.log("[SyncteraWebhook] Raw payload (unparsed):", rawFallback);
+    if (process.env.SYNCTERA_WEBHOOK_DEBUG === "true") {
+      Debugger.logPayload("[SyncteraWebhook][DEBUG] Payload:", req.body);
     }
 
-    const event = syncteraWebhookAdapter.normalizeEvent(req);
     await baasWebhookService.handleNormalizedEvent(event);
     return res.status(200).json({ status: "ok" });
   } catch (err: any) {
@@ -57,7 +36,7 @@ router.post("/", async (req, res) => {
     if (message === "InvalidSignature") {
       return res.status(401).json({ error: "InvalidSignature" });
     }
-    console.error("[SyncteraWebhook] Error:", message);
+    Debugger.logError(`[SyncteraWebhook] Error: ${message}`);
     return res.status(400).json({ error: "WebhookProcessingFailed" });
   }
 });

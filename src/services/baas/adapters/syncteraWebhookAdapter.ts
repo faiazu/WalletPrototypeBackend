@@ -43,33 +43,42 @@ function normalizeEvent(event: any): NormalizedBaasEvent {
   const type = event?.type ?? "UNKNOWN";
   const resourceType = typeof type === "string" ? type.split(".")[0] : "UNKNOWN";
 
-  // Parse event_resource (escaped JSON) for person details/status
-  let resource: any = {};
-  if (event?.event_resource && typeof event.event_resource === "string") {
-    try {
-      resource = JSON.parse(event.event_resource);
-    } catch {
-      resource = {};
-    }
-  }
-
+  // PERSON-related events: use resource_id/data fields (avoid deprecated event_resource)
   if (resourceType === "PERSON") {
+    let personId =
+      event?.resource_id ??
+      event?.data?.person_id ??
+      event?.person_id ??
+      "unknown";
+    let verificationStatus =
+      event?.data?.verification_status ??
+      event?.verification_status ??
+      "UNKNOWN";
+
+    // Fallback: parse deprecated event_resource if status/id missing
+    if (
+      (verificationStatus === "UNKNOWN" || personId === "unknown") &&
+      typeof event?.event_resource === "string"
+    ) {
+      try {
+        const parsed = JSON.parse(event.event_resource);
+        if (personId === "unknown" && parsed?.id) {
+          personId = parsed.id;
+        }
+        if (verificationStatus === "UNKNOWN" && parsed?.verification_status) {
+          verificationStatus = parsed.verification_status;
+        }
+      } catch {
+        // ignore parse errors
+      }
+    }
+
     const normalized: NormalizedKycVerificationEvent = {
       provider: BaasProviderName.SYNCTERA,
       type: "KYC_VERIFICATION",
       providerEventId: event?.id ?? event?.event_id ?? crypto.randomUUID(),
-      personId:
-        resource?.person_id ??
-        resource?.id ??
-        event?.resource_id ??
-        event?.data?.person_id ??
-        event?.person_id ??
-        "unknown",
-      verificationStatus:
-        resource?.verification_status ??
-        event?.data?.verification_status ??
-        event?.verification_status ??
-        "UNKNOWN",
+      personId,
+      verificationStatus,
       rawPayload: event,
     };
     return normalized;
@@ -80,12 +89,9 @@ function normalizeEvent(event: any): NormalizedBaasEvent {
     provider: BaasProviderName.SYNCTERA,
     type: "KYC_VERIFICATION",
     providerEventId: event?.id ?? event?.event_id ?? crypto.randomUUID(),
-    personId: resource?.person_id ?? resource?.id ?? event?.resource_id ?? "unknown",
+    personId: event?.resource_id ?? "unknown",
     verificationStatus:
-      resource?.verification_status ??
-      event?.data?.verification_status ??
-      event?.verification_status ??
-      "UNKNOWN",
+      event?.data?.verification_status ?? event?.verification_status ?? "UNKNOWN",
     rawPayload: event,
   } as NormalizedKycVerificationEvent;
 }
