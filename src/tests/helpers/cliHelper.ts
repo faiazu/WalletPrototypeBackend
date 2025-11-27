@@ -32,19 +32,25 @@ export async function cliRequest<T = any>(
     return res.data as T;
 
   } catch (err: any) {
-
-    console.error("\n❌ CLI request failed");
-
-    if (err.response) {
-      console.error("Status:", err.response.status);
-      console.error("Body:", err.response.data);
-    } 
-    else {
-      console.error(err.message || err);
-    }
-
-    process.exit(1);
+    throw err;
 
   }
 
+}
+
+/**
+ * Standardized error logger for CLI scripts.
+ * Use this in a catch block after calling cliRequest.
+ */
+export function handleCliError(err: any): never {
+  console.error("\n❌ CLI request failed");
+
+  if (err?.response) {
+    console.error("Status:", err.response.status);
+    console.error("Body:", err.response.data);
+  } else {
+    console.error(err?.message || err);
+  }
+
+  process.exit(1);
 }
