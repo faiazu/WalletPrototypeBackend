@@ -34,7 +34,7 @@ export function createApp(): Application {
   app.use("/wallet", walletRouter);
 
   // Card routes (create cards for users)
-  app.use("/cards", cardRouter);
+  app.use("/", cardRouter);
 
   // Mock ledger routes for testing
   if (process.env.NODE_ENV !== "production") {

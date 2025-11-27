@@ -7,86 +7,55 @@ import {
 } from "../../generated/prisma/client.js";
 
 import type {
-    BaasCustomer,
-    BaasCard
-} from "../../generated/prisma/client.js";
+  CreateCustomerParams,
+  CreateCustomerResult,
+  CreateCardParams,
+  CreateCardResult
+} from "./baasClient.js";
 
 import type {
   BaasClient,
-  CreateCustomerResult,
-  CreateCardResult,
 } from "./baasClient.js";
 
-/**
- * BaasService:
- *  - Knows about Divvi's database (Prisma) and user ids
- *  - Uses a BaasClient to talk to the external BaaS provider
- *  - Persists mappings (user -> externalCustomerId, user -> externalCardId).
- *
- * This service does NOT know about ledger or card authorizations.
- * It just handles onboarding users to the BaaS and creating cards.
- */
 export class BaasService {
+  private prisma: PrismaClient;
+  private client: BaasClient;
+  private provider: BaasProviderName;
+
   constructor(
-    private readonly prisma: PrismaClient,
-    private readonly client: BaasClient,
-    private readonly providerName: BaasProviderName = BaasProviderName.MOCK
-  ) {}
-
-  /**
-   * Find existing BaaS customer mapping in the DB.
-   */
-  private async findExistingCustomer(userId: string): Promise<BaasCustomer | null> {
-    return this.prisma.baasCustomer.findFirst({
-      where: {
-        userId,
-        providerName: this.providerName,
-      },
-    });
+    prisma: PrismaClient,
+    client: BaasClient,
+    provider: BaasProviderName
+  ) {
+    this.prisma = prisma;
+    this.client = client;
+    this.provider = provider;
   }
 
   /**
-   * Insert a new BaasCustomer record into the DB.
+   * Ensure there is a BaasCustomer row for this user + provider.
+   * Creates one via the BaaS client if needed.
    */
-  private async createCustomerRecord(
-    userId: string,
-    result: CreateCustomerResult
-  ): Promise<BaasCustomer> {
-    return this.prisma.baasCustomer.create({
-      data: {
-        userId,
-        providerName: result.provider,
-        externalCustomerId: result.externalCustomerId,
-      },
-    });
-  }
-
-  /**
-   * Ensure there is a BaaS customer for this Divvi user.
-   *
-   * - If a mapping already exists in the DB, re-use it.
-   * - Otherwise, call the BaaS API via BaasClient to create one,
-   *   then persist the mapping in BaasCustomer.
-   *
-   * Returns the provider name and the externalCustomerId.
-   */
-  async ensureCustomerForUser(
-    userId: string
-  ): Promise<{ provider: BaasProviderName; externalCustomerId: string }> {
-    // Make sure the user exists in your DB.
+  async ensureCustomerForUser(userId: string): Promise<{
+    provider: BaasProviderName;
+    externalCustomerId: string;
+  }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, email: true, name: true },
     });
 
     if (!user) {
-      throw new Error(
-        `Cannot ensure BaaS customer: user with id ${userId} does not exist`
-      );
+      throw new Error("UserNotFound");
     }
 
-    // Check if we already have a BaaS customer record for this user.
-    const existing = await this.findExistingCustomer(userId);
+    const existing = await this.prisma.baasCustomer.findFirst({
+      where: {
+        userId: user.id,
+        providerName: this.provider,
+      },
+    });
+
     if (existing) {
       return {
         provider: existing.providerName,
@@ -94,15 +63,21 @@ export class BaasService {
       };
     }
 
-    // Otherwise, create a new customer via the BaaS client.
-    const created: CreateCustomerResult = await this.client.createCustomer({
+    const params: CreateCustomerParams = {
       userId: user.id,
-      email: user.email,
-      ...(user.name && { legalName: user.name }),
-    });
+      email: user.email ?? undefined,
+      legalName: user.name ?? "",
+    };
 
-    // Persist the mapping in the DB.
-    await this.createCustomerRecord(userId, created);
+    const created: CreateCustomerResult = await this.client.createCustomer(params);
+
+    await this.prisma.baasCustomer.create({
+      data: {
+        userId: user.id,
+        providerName: created.provider,
+        externalCustomerId: created.externalCustomerId,
+      },
+    });
 
     return {
       provider: created.provider,
@@ -111,53 +86,58 @@ export class BaasService {
   }
 
   /**
-   * Insert a new BaasCard record into the DB.
-   */
-  private async createCardRecord(
-    userId: string,
-    result: CreateCardResult
-  ): Promise<BaasCard> {
-    return this.prisma.baasCard.create({
-      data: {
-        userId,
-        providerName: result.provider,
-        externalCardId: result.externalCardId,
-        last4: result.last4 ?? null,
-      },
-    });
-  }
-
-  /**
-   * Create a card for the given user at the BaaS, and store it in the DB.
+   * Create a card for a user and tie it to a specific wallet.
    *
-   * - Ensures the user has a BaaS customer first.
-   * - Calls the BaaS client to create a card.
-   * - Persists the BaasCard mapping.
-   *
-   * Returns basic info about the created card.
+   * This is crucial for your cardProgramService:
+   *  - card.userId  = the payer
+   *  - card.walletId = which shared wallet balance to hit
    */
-  async createCardForUser(userId: string): Promise<{
+  async createCardForUser(userId: string, walletId: string): Promise<{
     provider: BaasProviderName;
     externalCardId: string;
-    last4: string | null;
+    last4?: string;
   }> {
-    // Ensure we have a customer at the BaaS for this user.
-    const { provider, externalCustomerId } =
-      await this.ensureCustomerForUser(userId);
-
-    // Create the card via provider API (or mock).
-    const created: CreateCardResult = await this.client.createCard({
-      userId,
-      externalCustomerId,
+    // 1) Ensure user exists + belongs to this wallet (optional but recommended)
+    const walletMember = await this.prisma.walletMember.findFirst({
+      where: {
+        walletId,
+        userId,
+      },
+      select: { id: true },
     });
 
-    // Persist in the DB.
-    await this.createCardRecord(userId, created);
+    if (!walletMember) {
+      throw new Error("UserNotMemberOfWallet");
+    }
+
+    // 2) Ensure a BaaS customer exists for this user
+    const { provider, externalCustomerId } = await this.ensureCustomerForUser(
+      userId
+    );
+
+    // 3) Ask provider to create a card
+    const cardResult: CreateCardResult = await this.client.createCard({
+      userId,
+      externalCustomerId,
+      // later you can add params like spending limits here
+    } as CreateCardParams);
+
+    // 4) Persist mapping in BaasCard, including walletId
+    await this.prisma.baasCard.create({
+      data: {
+        userId,
+        walletId,
+        providerName: cardResult.provider,
+        externalCardId: cardResult.externalCardId,
+        last4: cardResult.last4 ?? null,
+        status: "ACTIVE",
+      },
+    });
 
     return {
-      provider,
-      externalCardId: created.externalCardId,
-      last4: created.last4 ?? null,
+      provider: cardResult.provider,
+      externalCardId: cardResult.externalCardId,
+      ...(cardResult.last4 && { last4: cardResult.last4 }),
     };
   }
 }
