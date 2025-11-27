@@ -31,6 +31,7 @@ async function main() {
 
   const eventId = eventIdArg || `mock_evt_${Date.now()}`;
   const baseUrl = baseUrlArg || defaultBaseUrl;
+  const timestamp = Math.floor(Date.now() / 1000).toString();
 
   const payload = {
     id: eventId,
@@ -42,15 +43,17 @@ async function main() {
   };
 
   const rawBody = JSON.stringify(payload);
+  const baseString = `${timestamp}.${rawBody}`;
   const hmac = crypto.createHmac("sha256", secret);
-  hmac.update(rawBody);
+  hmac.update(baseString);
   const signature = hmac.digest("hex");
 
   try {
     const res = await axios.post(`${baseUrl}/webhooks/synctera`, rawBody, {
       headers: {
         "Content-Type": "application/json",
-        "X-Tnsa-Signature": signature,
+        "Synctera-Signature": signature,
+        "Request-Timestamp": timestamp,
       },
       maxBodyLength: Infinity,
       maxContentLength: Infinity,
