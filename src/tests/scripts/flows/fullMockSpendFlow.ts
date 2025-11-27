@@ -1,4 +1,4 @@
-// End-to-end mock flow with verbose debugging:
+// End-to-end mock flow with debugging logs:
 //  - create two users (admin, member)
 //  - admin creates wallet
 //  - admin invites member; member joins
@@ -146,7 +146,7 @@ async function main() {
     logStep("Member depositing 5000");
     const memberDeposit = await cliRequest(
       "post",
-      `/test/ledger/deposit/${walletId}`,
+      `/ledger/${walletId}/deposit`,
       { amount: 5000 },
       memberSession.token
     );
@@ -156,7 +156,7 @@ async function main() {
     logStep("Admin depositing 3000");
     const adminDeposit = await cliRequest(
       "post",
-      `/test/ledger/deposit/${walletId}`,
+      `/ledger/${walletId}/deposit`,
       { amount: 3000 },
       adminSession.token
     );
@@ -215,7 +215,7 @@ async function main() {
     logStep("Reconciliation after spend");
     const reconciliation = await cliRequest(
       "get",
-      `/test/ledger/reconciliation/${walletId}`,
+      `/ledger/${walletId}/reconciliation`,
       undefined,
       adminSession.token
     );

@@ -16,7 +16,7 @@ async function main() {
 
     const result = await cliRequest(
       "get",
-      `/test/ledger/reconcile/${walletId}`,
+      `/ledger/${walletId}/reconciliation`,
       undefined,
       token
     );

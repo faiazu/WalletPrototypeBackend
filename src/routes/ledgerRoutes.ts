@@ -4,6 +4,7 @@ import { z } from "zod";
 import { authMiddleware } from "../core/authMiddleware.js";
 import { ledgerService } from "../services/ledger/ledgerService.js";
 import { isMember } from "../services/memberService.js";
+import { LedgerReconciliationService } from "../services/ledger/ledgerReconciliation.js";
 
 const router = express.Router();
 
@@ -29,6 +30,10 @@ const adjustmentSchema = z.object({
   toAccountId: z.string().min(1),
   amount: z.number().int().positive(),
   metadata: z.any().optional(),
+});
+
+const walletParamSchema = z.object({
+  walletId: z.string().min(1),
 });
 
 // POST /ledger/:walletId/deposit
@@ -155,3 +160,24 @@ router.post("/:walletId/adjustment", authMiddleware, async (req, res) => {
 });
 
 export { router as ledgerRouter };
+
+// GET /ledger/:walletId/reconciliation
+router.get("/:walletId/reconciliation", authMiddleware, async (req, res) => {
+  try {
+    const userId = req.userId!;
+    const { walletId } = walletParamSchema.parse(req.params);
+
+    if (!(await isMember(walletId, userId))) {
+      return res.status(403).json({ error: "Not a wallet member" });
+    }
+
+    const result = await LedgerReconciliationService.reconcile(walletId);
+    return res.json(result);
+  } catch (err: any) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: "Invalid walletId" });
+    }
+    console.error("Reconciliation error:", err);
+    return res.status(400).json({ error: err.message || "Reconciliation failed" });
+  }
+});

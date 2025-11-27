@@ -1,4 +1,4 @@
-// Deposit funds into a wallet via the mock ledger route.
+// Deposit funds into a wallet via the ledger route.
 // Usage:
 //   npx tsx src/tests/scripts/ledger/mockDeposit.ts <TOKEN> <WALLET_ID> <AMOUNT_MINOR>
 
@@ -21,7 +21,7 @@ async function main() {
 
     const result = await cliRequest(
       "post",
-      `/test/ledger/deposit/${walletId}`,
+      `/ledger/${walletId}/deposit`,
       { amount },
       token
     );
