@@ -55,24 +55,6 @@ function normalizeEvent(event: any): NormalizedBaasEvent {
       event?.verification_status ??
       "UNKNOWN";
 
-    // Fallback: parse deprecated event_resource if status/id missing
-    if (
-      (verificationStatus === "UNKNOWN" || personId === "unknown") &&
-      typeof event?.event_resource === "string"
-    ) {
-      try {
-        const parsed = JSON.parse(event.event_resource);
-        if (personId === "unknown" && parsed?.id) {
-          personId = parsed.id;
-        }
-        if (verificationStatus === "UNKNOWN" && parsed?.verification_status) {
-          verificationStatus = parsed.verification_status;
-        }
-      } catch {
-        // ignore parse errors
-      }
-    }
-
     const normalized: NormalizedKycVerificationEvent = {
       provider: BaasProviderName.SYNCTERA,
       type: "KYC_VERIFICATION",
