@@ -3,19 +3,22 @@
 
 import {
     PrismaClient,
-    BaasProviderName
+    BaasProviderName,
+    type BaasAccount,
 } from "../../generated/prisma/client.js";
 
 import type {
   CreateCustomerParams,
   CreateCustomerResult,
   CreateCardParams,
-  CreateCardResult
+  CreateCardResult,
+  CreateAccountResult,
 } from "./baasClient.js";
 
 import type {
   BaasClient,
 } from "./baasClient.js";
+import { supportsAccountCreation } from "./baasClient.js";
 
 export class BaasService {
   private prisma: PrismaClient;
@@ -39,6 +42,7 @@ export class BaasService {
   async ensureCustomerForUser(userId: string): Promise<{
     provider: BaasProviderName;
     externalCustomerId: string;
+    baasCustomerId: string;
   }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -60,6 +64,7 @@ export class BaasService {
       return {
         provider: existing.providerName,
         externalCustomerId: existing.externalCustomerId,
+        baasCustomerId: existing.id,
       };
     }
 
@@ -71,7 +76,7 @@ export class BaasService {
 
     const created: CreateCustomerResult = await this.client.createCustomer(params);
 
-    await this.prisma.baasCustomer.create({
+    const createdRow = await this.prisma.baasCustomer.create({
       data: {
         userId: user.id,
         providerName: created.provider,
@@ -82,7 +87,91 @@ export class BaasService {
     return {
       provider: created.provider,
       externalCustomerId: created.externalCustomerId,
+      baasCustomerId: createdRow.id,
     };
+  }
+
+  /**
+   * Ensure there is a BaasAccount for this user/provider.
+   * Optionally binds it to a wallet (for routing deposits and card issuance).
+   */
+  async ensureAccountForUser(
+    userId: string,
+    walletId?: string
+  ): Promise<BaasAccount> {
+    if (!supportsAccountCreation(this.client)) {
+      throw new Error("AccountCreationNotSupported");
+    }
+
+    const existing = await this.prisma.baasAccount.findFirst({
+      where: {
+        userId,
+        providerName: this.provider,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    if (existing) {
+      if (walletId && !existing.walletId) {
+        return this.prisma.baasAccount.update({
+          where: { id: existing.id },
+          data: { walletId },
+        });
+      }
+      return existing;
+    }
+
+    const { provider, externalCustomerId, baasCustomerId } =
+      await this.ensureCustomerForUser(userId);
+
+    const accountResult: CreateAccountResult = await this.client.createAccount({
+      externalCustomerId,
+    });
+
+    const account = await this.prisma.baasAccount.create({
+      data: {
+        userId,
+        walletId: walletId ?? null,
+        baasCustomerId,
+        providerName: provider,
+        externalAccountId: accountResult.externalAccountId,
+        accountType: accountResult.accountType ?? "CHECKING",
+        currency: accountResult.currency ?? "USD",
+        status: accountResult.status ?? "PENDING",
+        accessStatus: accountResult.accessStatus ?? null,
+        accountNumberLast4: accountResult.accountNumberLast4 ?? null,
+        routingNumber: accountResult.routingNumber ?? null,
+        metadata: accountResult.rawResponse ?? null,
+      },
+    });
+
+    if (walletId) {
+      const fundingReference = "";
+      await this.prisma.baasFundingRoute.upsert({
+        where: {
+          providerName_providerAccountId_reference: {
+            providerName: provider,
+            providerAccountId: accountResult.externalAccountId,
+            reference: fundingReference,
+          },
+        },
+        update: {
+          walletId,
+          userId,
+          baasAccountId: account.id,
+        },
+        create: {
+          providerName: provider,
+          providerAccountId: accountResult.externalAccountId,
+          reference: fundingReference,
+          walletId,
+          userId,
+          baasAccountId: account.id,
+        },
+      });
+    }
+
+    return account;
   }
 
   /**
@@ -111,26 +200,49 @@ export class BaasService {
     }
 
     // 2) Ensure a BaaS customer exists for this user
-    const { provider, externalCustomerId } = await this.ensureCustomerForUser(
-      userId
-    );
+    const { provider, externalCustomerId, baasCustomerId } =
+      await this.ensureCustomerForUser(userId);
 
-    // 3) Ask provider to create a card
+    // 3) Ensure a provider account exists (and bind to wallet if provided)
+    const account = await this.ensureAccountForUser(userId, walletId);
+
+    // 4) Ask provider to create a card
     const cardResult: CreateCardResult = await this.client.createCard({
       userId,
       externalCustomerId,
+      externalAccountId: account.externalAccountId,
       // later you can add params like spending limits here
     } as CreateCardParams);
 
-    // 4) Persist mapping in BaasCard, including walletId
+    // If a card already exists for this wallet/user/provider with same external id, return it.
+    const existingCard = await this.prisma.baasCard.findFirst({
+      where: {
+        userId,
+        walletId,
+        providerName: this.provider,
+        externalCardId: cardResult.externalCardId,
+      },
+    });
+
+    if (existingCard) {
+      return {
+        provider: existingCard.providerName,
+        externalCardId: existingCard.externalCardId,
+        ...(existingCard.last4 && { last4: existingCard.last4 }),
+      };
+    }
+
+    // 5) Persist mapping in BaasCard, including walletId
     await this.prisma.baasCard.create({
       data: {
         userId,
         walletId,
+        baasCustomerId,
+        baasAccountId: account.id,
         providerName: cardResult.provider,
         externalCardId: cardResult.externalCardId,
         last4: cardResult.last4 ?? null,
-        status: "ACTIVE",
+        status: cardResult.status ?? "ACTIVE",
       },
     });
 

@@ -15,7 +15,9 @@ export type BaasEventType =
   | "CARD_AUTH_REVERSAL"
   | "CARD_CLEARING"
   | "WALLET_FUNDING"
-  | "KYC_VERIFICATION";
+  | "KYC_VERIFICATION"
+  | "ACCOUNT_STATUS"
+  | "CARD_STATUS";
 
 /**
  * Normalized shape for a card authorization event.
@@ -129,7 +131,9 @@ export type NormalizedBaasEvent =
   | NormalizedCardAuthReversalEvent
   | NormalizedCardClearingEvent
   | NormalizedWalletFundingEvent
-  | NormalizedKycVerificationEvent;
+  | NormalizedKycVerificationEvent
+  | NormalizedAccountStatusEvent
+  | NormalizedCardStatusEvent;
 
 /**
  * Normalized shape for KYC verification status updates.
@@ -144,5 +148,28 @@ export interface NormalizedKycVerificationEvent {
   rawPayload: unknown;
 }
 
+export interface NormalizedAccountStatusEvent {
+  provider: BaasProviderName;
+  type: "ACCOUNT_STATUS";
+
+  providerEventId: string;
+  providerAccountId: string;
+  status?: string;
+  accessStatus?: string;
+  rawPayload: unknown;
+}
+
+export interface NormalizedCardStatusEvent {
+  provider: BaasProviderName;
+  type: "CARD_STATUS";
+
+  providerEventId: string;
+  providerCardId: string;
+  status?: string;
+  rawPayload: unknown;
+}
+
 export type NormalizedSyncteraEvent =
-  | NormalizedKycVerificationEvent;
+  | NormalizedKycVerificationEvent
+  | NormalizedAccountStatusEvent
+  | NormalizedCardStatusEvent;

@@ -1,6 +1,7 @@
 import { prisma } from "../../../core/db.js";
 import { config } from "../../../core/config.js";
 import { BaasProviderName } from "../../../generated/prisma/enums.js";
+import { baasService } from "../../../core/dependencies.js";
 import { linkUserToSynctera } from "./userSyncteraService.js";
 import {
   acceptDisclosures,
@@ -91,6 +92,17 @@ export async function completeUserKyc(userId: string, input: KycInput) {
     (verifyResult as any).verification_status ||
     (await getPersonVerificationStatus(personId)) ||
     "PENDING";
+
+  // If KYC accepted, ensure a checking account exists for the user
+  if (verificationStatus === "ACCEPTED" && config.baasProvider === "SYNCTERA") {
+    try {
+      await baasService.ensureAccountForUser(userId);
+    } catch (err) {
+      console.error(
+        `[Synctera] Failed to ensure account after KYC for user ${userId}: ${err}`
+      );
+    }
+  }
 
   // Persist KYC status on user
   const updatedUser = await prisma.user.update({

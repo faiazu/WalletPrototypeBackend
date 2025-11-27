@@ -6,6 +6,8 @@ import {
   BaasProviderName,
   type NormalizedBaasEvent,
   type NormalizedKycVerificationEvent,
+  type NormalizedAccountStatusEvent,
+  type NormalizedCardStatusEvent,
 } from "../baasTypes.js";
 
 // Verify Synctera webhook signature:
@@ -45,12 +47,12 @@ function normalizeEvent(event: any): NormalizedBaasEvent {
 
   // PERSON-related events: use resource_id/data fields (avoid deprecated event_resource)
   if (resourceType === "PERSON") {
-    let personId =
+    const personId =
       event?.resource_id ??
       event?.data?.person_id ??
       event?.person_id ??
       "unknown";
-    let verificationStatus =
+    const verificationStatus =
       event?.data?.verification_status ??
       event?.verification_status ??
       "UNKNOWN";
@@ -61,6 +63,41 @@ function normalizeEvent(event: any): NormalizedBaasEvent {
       providerEventId: event?.id ?? event?.event_id ?? crypto.randomUUID(),
       personId,
       verificationStatus,
+      rawPayload: event,
+    };
+    return normalized;
+  }
+
+  if (resourceType === "ACCOUNT") {
+    const providerAccountId =
+      event?.resource_id ??
+      event?.data?.account_id ??
+      event?.account_id ??
+      "unknown";
+    const normalized: NormalizedAccountStatusEvent = {
+      provider: BaasProviderName.SYNCTERA,
+      type: "ACCOUNT_STATUS",
+      providerEventId: event?.id ?? event?.event_id ?? crypto.randomUUID(),
+      providerAccountId,
+      status: event?.data?.status ?? event?.status,
+      accessStatus: event?.data?.access_status ?? event?.access_status,
+      rawPayload: event,
+    };
+    return normalized;
+  }
+
+  if (resourceType === "CARD") {
+    const providerCardId =
+      event?.resource_id ??
+      event?.data?.card_id ??
+      event?.card_id ??
+      "unknown";
+    const normalized: NormalizedCardStatusEvent = {
+      provider: BaasProviderName.SYNCTERA,
+      type: "CARD_STATUS",
+      providerEventId: event?.id ?? event?.event_id ?? crypto.randomUUID(),
+      providerCardId,
+      status: event?.data?.status ?? event?.status,
       rawPayload: event,
     };
     return normalized;

@@ -19,11 +19,39 @@ export interface CreateCustomerResult {
 }
 
 /**
+ * Parameters to create a BaaS account for a customer.
+ */
+export interface CreateAccountParams {
+  externalCustomerId: string; // provider’s customer id
+  accountType?: string;       // e.g. CHECKING, SAVING
+  currency?: string;          // e.g. USD
+  accountTemplateId?: string; // provider-specific template id (optional)
+}
+
+/**
+ * Result returned when a BaaS account has been created.
+ */
+export interface CreateAccountResult {
+  provider: BaasProviderName;
+  externalAccountId: string;
+  status?: string;
+  accessStatus?: string;
+  accountType?: string;
+  currency?: string;
+  accountNumberLast4?: string;
+  routingNumber?: string;
+  rawResponse?: any;
+}
+
+/**
  * Parameters to create a BaaS card for a customer.
  */
 export interface CreateCardParams {
   userId: string;             // internal Divvi user id (for context/logging)
   externalCustomerId: string; // provider’s customer id
+  externalAccountId?: string; // provider’s account id (if required by provider)
+  cardProductId?: string;     // provider-specific card product/program id
+  cardType?: string;          // e.g. VIRTUAL/PHYSICAL
 }
 
 /**
@@ -33,6 +61,7 @@ export interface CreateCardResult {
   provider: BaasProviderName;
   externalCardId: string; // provider-specific card id/token
   last4?: string;         // optional, for display
+  status?: string;
 }
 
 /**
@@ -42,7 +71,14 @@ export interface CreateCardResult {
 export interface BaasClient {
   createCustomer(params: CreateCustomerParams): Promise<CreateCustomerResult>;
   createCard(params: CreateCardParams): Promise<CreateCardResult>;
+  createAccount?(params: CreateAccountParams): Promise<CreateAccountResult>;
   // later: getProgramBalance, initiateTransfer, freezeCard, etc.
+}
+
+export function supportsAccountCreation(
+  client: BaasClient
+): client is BaasClient & { createAccount: (params: CreateAccountParams) => Promise<CreateAccountResult> } {
+  return typeof (client as any)?.createAccount === "function";
 }
 
 /**
@@ -66,6 +102,16 @@ export class MockBaasClient implements BaasClient {
       provider: this.provider,
       externalCardId: params.externalCustomerId.replace("cust", "card"),
       last4: "4242",
+    };
+  }
+
+  async createAccount(params: CreateAccountParams): Promise<CreateAccountResult> {
+    return {
+      provider: this.provider,
+      externalAccountId: `mock_acct_${params.externalCustomerId}`,
+      status: "ACTIVE",
+      accountType: params.accountType ?? "CHECKING",
+      currency: params.currency ?? "USD",
     };
   }
 }

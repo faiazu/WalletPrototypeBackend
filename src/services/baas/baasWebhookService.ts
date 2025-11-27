@@ -14,6 +14,8 @@ import type {
   NormalizedCardClearingEvent,
   NormalizedWalletFundingEvent,
   NormalizedKycVerificationEvent,
+  NormalizedAccountStatusEvent,
+  NormalizedCardStatusEvent,
 } from "./baasTypes.js";
 
 import type { CardProgramService, CardAuthDecision } from "./cardProgramService.js";
@@ -38,6 +40,7 @@ export interface BaasWebhookServiceDeps {
   prisma: PrismaClient;
   cardProgramService: CardProgramService;
   ledger: LedgerServiceForFunding;
+  ensureAccountForUser?: (userId: string) => Promise<any>;
 }
 
 /**
@@ -50,11 +53,13 @@ export class BaasWebhookService {
   private prisma: PrismaClient;
   private cardProgramService: CardProgramService;
   private ledger: LedgerServiceForFunding;
+  private ensureAccountForUser: ((userId: string) => Promise<any>) | undefined;
 
   constructor(deps: BaasWebhookServiceDeps) {
     this.prisma = deps.prisma;
     this.cardProgramService = deps.cardProgramService;
     this.ledger = deps.ledger;
+    this.ensureAccountForUser = deps.ensureAccountForUser;
   }
 
   /**
@@ -162,6 +167,18 @@ export class BaasWebhookService {
       return;
     }
 
+    if (event.type === "ACCOUNT_STATUS") {
+      await this.handleAccountStatus(event as NormalizedAccountStatusEvent);
+      await this.markEventProcessed(providerName, event.providerEventId);
+      return;
+    }
+
+    if (event.type === "CARD_STATUS") {
+      await this.handleCardStatus(event as NormalizedCardStatusEvent);
+      await this.markEventProcessed(providerName, event.providerEventId);
+      return;
+    }
+
     const unmatchedEvent = event as NormalizedBaasEvent;
 
     console.warn(
@@ -245,6 +262,19 @@ export class BaasWebhookService {
       data: { kycStatus: event.verificationStatus },
     });
 
+    if (
+      event.verificationStatus === "ACCEPTED" &&
+      typeof this.ensureAccountForUser === "function"
+    ) {
+      try {
+        await this.ensureAccountForUser(customer.userId);
+      } catch (err) {
+        console.warn(
+          `[BaasWebhookService] Failed to ensure account after KYC for user ${customer.userId}: ${String(err)}`
+        );
+      }
+    }
+
     console.log(
       `[BaasWebhookService] KYC status updated: userId=${customer.userId}, status=${event.verificationStatus}`
     );
@@ -311,14 +341,70 @@ export class BaasWebhookService {
   private async findFundingRoute(
     event: NormalizedWalletFundingEvent
   ): Promise<BaasFundingRoute | null> {
+    const referenceValue = event.reference ?? "";
     const route = await this.prisma.baasFundingRoute.findFirst({
       where: {
         providerName: event.provider,
         providerAccountId: event.providerAccountId,
-        reference: event.reference ?? null,
+        reference: {
+          in: [referenceValue, null],
+        },
       },
     });
 
     return route;
+  }
+
+  private async handleAccountStatus(
+    event: NormalizedAccountStatusEvent
+  ): Promise<void> {
+    const data: any = {
+      updatedAt: new Date(),
+    };
+
+    if (typeof event.status !== "undefined") {
+      data.status = event.status;
+    }
+    if (typeof event.accessStatus !== "undefined") {
+      data.accessStatus = event.accessStatus;
+    }
+
+    const result = await this.prisma.baasAccount.updateMany({
+      where: {
+        providerName: event.provider,
+        externalAccountId: event.providerAccountId,
+      },
+      data,
+    });
+
+    if (result.count === 0) {
+      console.warn(
+        `[BaasWebhookService] Account status event with no mapping: providerAccountId=${event.providerAccountId}`
+      );
+    }
+  }
+
+  private async handleCardStatus(event: NormalizedCardStatusEvent): Promise<void> {
+    const data: any = {
+      updatedAt: new Date(),
+    };
+
+    if (typeof event.status !== "undefined") {
+      data.status = event.status;
+    }
+
+    const result = await this.prisma.baasCard.updateMany({
+      where: {
+        providerName: event.provider,
+        externalCardId: event.providerCardId,
+      },
+      data,
+    });
+
+    if (result.count === 0) {
+      console.warn(
+        `[BaasWebhookService] Card status event with no mapping: providerCardId=${event.providerCardId}`
+      );
+    }
   }
 }

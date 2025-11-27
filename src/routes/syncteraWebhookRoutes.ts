@@ -18,12 +18,29 @@ router.post("/", async (req, res) => {
     const event = syncteraWebhookAdapter.normalizeEvent(req);
 
     // Concise log; toggle detailed payload logging with SYNCTERA_WEBHOOK_DEBUG=true
-    const personId = "personId" in event ? (event as any).personId : "n/a";
-    const verificationStatus =
-      "verificationStatus" in event ? (event as any).verificationStatus : "n/a";
-    Debugger.logInfo(
-      `[SyncteraWebhook] type=${event.type}, providerEventId=${event.providerEventId}, personId=${personId}, verificationStatus=${verificationStatus}`
-    );
+    if (event.type === "KYC_VERIFICATION") {
+      const personId = (event as any).personId;
+      const verificationStatus = (event as any).verificationStatus;
+      Debugger.logInfo(
+        `[SyncteraWebhook] type=${event.type}, providerEventId=${event.providerEventId}, personId=${personId}, verificationStatus=${verificationStatus}`
+      );
+    } else if (event.type === "ACCOUNT_STATUS") {
+      const accountId = (event as any).providerAccountId;
+      const status = (event as any).status;
+      Debugger.logInfo(
+        `[SyncteraWebhook] type=${event.type}, providerEventId=${event.providerEventId}, accountId=${accountId}, status=${status}`
+      );
+    } else if (event.type === "CARD_STATUS") {
+      const cardId = (event as any).providerCardId;
+      const status = (event as any).status;
+      Debugger.logInfo(
+        `[SyncteraWebhook] type=${event.type}, providerEventId=${event.providerEventId}, cardId=${cardId}, status=${status}`
+      );
+    } else {
+      Debugger.logInfo(
+        `[SyncteraWebhook] type=${event.type}, providerEventId=${event.providerEventId}`
+      );
+    }
 
     if (process.env.SYNCTERA_WEBHOOK_DEBUG === "true") {
       Debugger.logPayload("[SyncteraWebhook][DEBUG] Payload:", req.body);

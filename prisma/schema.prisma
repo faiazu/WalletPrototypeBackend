@@ -39,6 +39,7 @@ model User {
   baasCards         BaasCard[]
   baasFundingRoutes BaasFundingRoute[]
   cardAuthHolds     CardAuthHold[]
+  baasAccounts      BaasAccount[]
 }
 
 model Wallet {
@@ -53,6 +54,7 @@ model Wallet {
   walletBalance              WalletBalance?
   members                    WalletMember[]
   baasCards                  BaasCard[]
+  baasAccounts               BaasAccount[]
   baasFundingRoutes          BaasFundingRoute[]
   cardAuthHolds              CardAuthHold[]
 }
@@ -117,13 +119,40 @@ model BaasCustomer {
   updatedAt          DateTime         @updatedAt
 
   user  User       @relation(fields: [userId], references: [id])
+  accounts BaasAccount[]
   cards BaasCard[]
+}
+
+model BaasAccount {
+  id                 String           @id @default(cuid())
+  userId             String
+  walletId           String?
+  baasCustomerId     String?
+  providerName       BaasProviderName
+  externalAccountId  String           @unique
+  accountType        String
+  currency           String
+  status             String           @default("ACTIVE")
+  accessStatus       String?
+  accountNumberLast4 String?
+  routingNumber      String?
+  metadata           Json?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id])
+  wallet       Wallet?       @relation(fields: [walletId], references: [id])
+  baasCustomer BaasCustomer? @relation(fields: [baasCustomerId], references: [id])
+  cards        BaasCard[]
+  fundingRoutes BaasFundingRoute[]
 }
 
 model BaasCard {
   id             String           @id @default(cuid())
   userId         String
   walletId       String? // optional link to a "default" wallet for this card
+  baasCustomerId String?
+  baasAccountId  String?
   providerName   BaasProviderName
   externalCardId String           @unique
   last4          String?
@@ -131,10 +160,10 @@ model BaasCard {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
-  user           User          @relation(fields: [userId], references: [id])
-  wallet         Wallet?       @relation(fields: [walletId], references: [id])
-  baasCustomer   BaasCustomer? @relation(fields: [baasCustomerId], references: [id])
-  baasCustomerId String?
+  user         User          @relation(fields: [userId], references: [id])
+  wallet       Wallet?       @relation(fields: [walletId], references: [id])
+  baasCustomer BaasCustomer? @relation(fields: [baasCustomerId], references: [id])
+  baasAccount  BaasAccount?  @relation(fields: [baasAccountId], references: [id])
 }
 
 model BaasEvent {
@@ -156,10 +185,12 @@ model BaasFundingRoute {
   reference         String?
   walletId          String
   userId            String
+  baasAccountId     String?
   createdAt         DateTime         @default(now())
 
   wallet Wallet @relation(fields: [walletId], references: [id])
   user   User   @relation(fields: [userId], references: [id])
+  baasAccount BaasAccount? @relation(fields: [baasAccountId], references: [id])
 
   @@unique([providerName, providerAccountId, reference])
 }

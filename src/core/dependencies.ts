@@ -9,6 +9,7 @@ import { ledgerService } from "../services/ledger/ledgerService.js";
 import { MockBaasClient } from "../services/baas/baasClient.js";
 import { BaasService } from "../services/baas/baasService.js";
 import { BaasProviderName } from "../generated/prisma/enums.js";
+import { SyncteraBaasClient } from "../services/baas/synctera/syncteraBaasClient.js";
 import { config } from "./config.js";
 
 // Card Program (auth + clearing)
@@ -22,6 +23,8 @@ const baasClient = (() => {
   switch (config.baasProvider) {
     case "MOCK":
       return new MockBaasClient();
+    case "SYNCTERA":
+      return new SyncteraBaasClient();
     // case "STRIPE_ISSUING":
     //   return new StripeBaasClient(config.stripe.apiKey!);
     default:
@@ -56,6 +59,7 @@ export const baasWebhookService = new BaasWebhookService({
   ledger: {
     postDeposit: ledgerService.postDeposit.bind(ledgerService),
   },
+  ensureAccountForUser: baasService.ensureAccountForUser.bind(baasService),
 });
 
 

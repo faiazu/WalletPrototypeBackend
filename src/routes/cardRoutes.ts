@@ -41,6 +41,12 @@ router.post(
       if (err?.message === "UserNotMemberOfWallet") {
         return res.status(403).json({ error: "UserNotMemberOfWallet" });
       }
+      if (err?.message === "AccountCreationNotSupported") {
+        return res.status(400).json({ error: "AccountCreationNotSupported" });
+      }
+      if (typeof err?.message === "string" && err.message.includes("Synctera card issuance")) {
+        return res.status(400).json({ error: err.message });
+      }
       next(err);
     }
   }
