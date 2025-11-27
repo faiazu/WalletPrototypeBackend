@@ -1,7 +1,7 @@
 import express, { type Application, type Request, type Response } from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 
+import "./core/config.js";
 // Routes
 import { authRouter } from "./routes/authRoutes.js";
 import { userRouter } from "./routes/userRoutes.js";
@@ -14,8 +14,6 @@ import { ledgerRouter } from "./routes/ledgerRoutes.js";
 import { mockLedger } from "./tests/mocks/ledger/mockLedgerIndex.js";
 import { mockAuth } from "./tests/mocks/auth/mockAuthIndex.js";
 import { mockBaas } from "./tests/mocks/baas/mockBaasIndex.js";
-
-dotenv.config();
 
 export function createApp(): Application {
   const app = express();

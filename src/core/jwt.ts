@@ -1,6 +1,6 @@
+import "./config.js";
 import jwt from "jsonwebtoken";
 const { sign, verify } = jwt;
-import "dotenv/config";
 
 if (!process.env.JWT_SECRET) {
   throw new Error("Missing JWT_SECRET in environment");

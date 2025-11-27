@@ -1,9 +1,9 @@
-// script to test depositing funds into a wallet via the MOCK deposit route
+// script to test depositing funds into a wallet via the deposit route
 
 import { cliRequest, handleCliError } from "../../helpers/cliHelper.js";
 
 /**
- * Deposits funds into a wallet using the MOCK deposit route.
+ * Deposits funds into a wallet using the deposit route.
  * Usage:
  *   npx tsx src/tests/scripts/ledger/deposit.ts <TOKEN> <WALLET_ID> <AMOUNT>
  */

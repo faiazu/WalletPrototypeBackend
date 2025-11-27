@@ -9,6 +9,7 @@ import { ledgerService } from "../services/ledger/ledgerService.js";
 import { MockBaasClient } from "../services/baas/baasClient.js";
 import { BaasService } from "../services/baas/baasService.js";
 import { BaasProviderName } from "../generated/prisma/enums.js";
+import { config } from "./config.js";
 
 // Card Program (auth + clearing)
 import { CardProgramService } from "../services/baas/cardProgramService.js";
@@ -16,15 +17,26 @@ import { CardProgramService } from "../services/baas/cardProgramService.js";
 // BaaS inbound webhook handling (webhooks: card auth, clearing, funding)
 import { BaasWebhookService } from "../services/baas/baasWebhookService.js";
 
-// Instantiate the low level BaaS HTTP client (for now, the mock version)
-const baasClient = new MockBaasClient();
+// Instantiate the low level BaaS HTTP client based on configured provider
+const baasClient = (() => {
+  switch (config.baasProvider) {
+    case "MOCK":
+      return new MockBaasClient();
+    // case "STRIPE_ISSUING":
+    //   return new StripeBaasClient(config.stripe.apiKey!);
+    default:
+      return new MockBaasClient();
+  }
+})();
+
+// Map provider string to Prisma enum
+const providerName =
+  config.baasProvider === "STRIPE_ISSUING"
+    ? BaasProviderName.STRIPE_ISSUING
+    : BaasProviderName.MOCK;
 
 // Instantiate the high level BaasService that knows about Prisma + provider
-export const baasService = new BaasService(
-  prisma,
-  baasClient,
-  BaasProviderName.MOCK
-);
+export const baasService = new BaasService(prisma, baasClient, providerName);
 
 // Instantiate the CardProgramService
 export const cardProgramService = new CardProgramService({
@@ -48,4 +60,3 @@ export const baasWebhookService = new BaasWebhookService({
 // future:
 // export const walletService = new WalletService(prisma, ...);
 // export const ledgerService = new LedgerService(prisma, ...);
-
