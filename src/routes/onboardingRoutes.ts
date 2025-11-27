@@ -24,8 +24,8 @@ const kycSchema = z.object({
   last_name: z.string().min(1),
   dob: z.string().min(1), // ISO date string
   phone_number: z.string().min(1),
-  email: z.string().email(),
-  ssn: z.string().min(1).optional(),
+  email: z.email(),
+  ssn: z.string().min(1),
   legal_address: addressSchema,
   disclosures: z.array(disclosureSchema).optional(),
   customer_ip_address: z.string().min(1).optional(),
@@ -37,7 +37,14 @@ router.post("/kyc", authMiddleware, async (req, res) => {
     const userId = req.userId!;
     const input = kycSchema.parse(req.body);
 
-    const result = await completeUserKyc(userId, input);
+    // Ensure optional fields that backend expects as non-optional are normalized
+    const kycInput = {
+      ...input,
+      disclosures: input.disclosures ?? [],
+      customer_ip_address: input.customer_ip_address ?? "127.0.0.1",
+    };
+
+    const result = await completeUserKyc(userId, kycInput);
 
     return res.status(200).json({
       personId: result.personId,

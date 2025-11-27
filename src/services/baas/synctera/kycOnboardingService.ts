@@ -83,7 +83,7 @@ export async function completeUserKyc(userId: string, input: KycInput) {
   // Run KYC verification
   const verifyResult = await runKyc({
     personId,
-    customer_ip_address: input.customer_ip_address || "127.0.0.1",
+    customer_ip_address: input.customer_ip_address || "184.233.47.237", // sample public IP from script
   });
 
   // Get the latest verification status
