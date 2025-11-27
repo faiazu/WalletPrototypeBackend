@@ -10,6 +10,8 @@ import type {
   NormalizedCardClearingEvent,
 } from "./baasTypes.js";
 
+import { AuthHoldStatus } from "../../generated/prisma/enums.js";
+
 /**
  * Simple APPROVE/DECLINE decision type for card authorizations
  */
@@ -119,6 +121,7 @@ export class CardProgramService {
 
     // Check internal wallet_pool balance via ledger
     const walletPoolBalance = await this.ledger.getWalletPoolBalance(walletId);
+    const payingUserId = card.userId;
 
     if (walletPoolBalance < event.amountMinor) {
       console.warn(
@@ -129,7 +132,55 @@ export class CardProgramService {
     }
 
     // All checks pass -> APPROVE from Divvi's side
-    return "APPROVE";
+    const decision: CardAuthDecision = "APPROVE";
+
+    // Persist a hold for traceability (no funds move on auth yet)
+    const providerAuthId = event.providerTransactionId;
+    const authMetadata = {
+      occurredAt: event.occurredAt.toISOString(),
+      merchantName: event.merchantName,
+      merchantCategoryCode: event.merchantCategoryCode,
+      merchantCountry: event.merchantCountry,
+      network: event.network,
+      isCardPresent: event.isCardPresent,
+      isOnline: event.isOnline,
+      raw: event.rawPayload ?? null,
+    } as const;
+    try {
+      await this.prisma.cardAuthHold.upsert({
+        where: {
+          providerName_providerAuthId: {
+            providerName: event.provider,
+            providerAuthId,
+          },
+        },
+        update: {
+          status: AuthHoldStatus.PENDING,
+          amountMinor: event.amountMinor,
+          currency: event.currency,
+          metadata: authMetadata,
+        },
+        create: {
+          providerName: event.provider,
+          providerAuthId,
+          providerCardId: event.providerCardId,
+          walletId,
+          userId: payingUserId,
+          amountMinor: event.amountMinor,
+          currency: event.currency,
+          status: AuthHoldStatus.PENDING,
+          metadata: authMetadata,
+        },
+      });
+    } catch (err) {
+      console.warn(
+        `[CardProgramService] Failed to persist auth hold for authId=${providerAuthId}: ${String(
+          err
+        )}`
+      );
+    }
+
+    return decision;
   }
 
   /**
@@ -192,10 +243,34 @@ export class CardProgramService {
       metadata,
     });
 
+    // Mark related hold as cleared (if present)
+    const providerAuthId = event.providerAuthId ?? event.providerTransactionId;
+    if (providerAuthId) {
+      try {
+        await this.prisma.cardAuthHold.update({
+          where: {
+            providerName_providerAuthId: {
+              providerName: event.provider,
+              providerAuthId,
+            },
+          },
+          data: {
+            status: AuthHoldStatus.CLEARED,
+            clearedAt: new Date(),
+          },
+        });
+      } catch (err) {
+        console.warn(
+          `[CardProgramService] No matching auth hold to clear for providerAuthId=${providerAuthId}: ${String(
+            err
+          )}`
+        );
+      }
+    }
+
     console.log(
       `[CardProgramService] Clearing posted to ledger: walletId=${walletId}, ` +
         `payingUserId=${payingUserId}, amountMinor=${event.amountMinor} ${event.currency}`
     );
   }
 }
-

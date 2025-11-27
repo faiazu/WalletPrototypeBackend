@@ -16,6 +16,13 @@ enum BaasProviderName {
   OTHER
 }
 
+enum AuthHoldStatus {
+  PENDING
+  CLEARED
+  REVERSED
+  EXPIRED
+}
+
 model User {
   id             String          @id @default(uuid())
   email          String          @unique
@@ -27,24 +34,26 @@ model User {
   walletsAdmin   Wallet[]        @relation("WalletAdmin")
   memberships    WalletMember[]
 
-  baasCustomer   BaasCustomer?
-  baasCards      BaasCard[]
+  baasCustomer      BaasCustomer?
+  baasCards         BaasCard[]
   baasFundingRoutes BaasFundingRoute[]
+  cardAuthHolds     CardAuthHold[]
 }
 
 model Wallet {
-  id                         String          @id @default(uuid())
+  id                         String             @id @default(uuid())
   name                       String
   adminId                    String
-  createdAt                  DateTime        @default(now())
+  createdAt                  DateTime           @default(now())
   providerFinancialAccountId String?
   cards                      Card[]
   ledgerAccounts             LedgerAccount[]
-  admin                      User            @relation("WalletAdmin", fields: [adminId], references: [id])
+  admin                      User               @relation("WalletAdmin", fields: [adminId], references: [id])
   walletBalance              WalletBalance?
   members                    WalletMember[]
   baasCards                  BaasCard[]
   baasFundingRoutes          BaasFundingRoute[]
+  cardAuthHolds              CardAuthHold[]
 }
 
 model WalletBalance {
@@ -128,28 +137,50 @@ model BaasCard {
 }
 
 model BaasEvent {
-  id             String           @id @default(cuid())
-  providerName   BaasProviderName
+  id              String           @id @default(cuid())
+  providerName    BaasProviderName
   providerEventId String
-  type           String           // e.g. "CARD_AUTH", "CARD_CLEARING", "WALLET_FUNDING"
-  payload        Json
-  processedAt    DateTime?
-  createdAt      DateTime         @default(now())
+  type            String // e.g. "CARD_AUTH", "CARD_CLEARING", "WALLET_FUNDING"
+  payload         Json
+  processedAt     DateTime?
+  createdAt       DateTime         @default(now())
 
   @@unique([providerName, providerEventId])
 }
 
 model BaasFundingRoute {
-  id               String          @id @default(cuid())
-  providerName     BaasProviderName
+  id                String           @id @default(cuid())
+  providerName      BaasProviderName
   providerAccountId String
-  reference        String?
-  walletId         String
-  userId           String
-  createdAt        DateTime        @default(now())
+  reference         String?
+  walletId          String
+  userId            String
+  createdAt         DateTime         @default(now())
 
-  wallet           Wallet          @relation(fields: [walletId], references: [id])
-  user             User            @relation(fields: [userId], references: [id])
+  wallet Wallet @relation(fields: [walletId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
 
   @@unique([providerName, providerAccountId, reference])
+}
+
+model CardAuthHold {
+  id             String           @id @default(cuid())
+  providerName   BaasProviderName
+  providerAuthId String
+  providerCardId String
+  walletId       String
+  userId         String
+  amountMinor    Int
+  currency       String
+  status         AuthHoldStatus   @default(PENDING)
+  metadata       Json?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  clearedAt      DateTime?
+  reversedAt     DateTime?
+
+  wallet Wallet @relation(fields: [walletId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@unique([providerName, providerAuthId])
 }
