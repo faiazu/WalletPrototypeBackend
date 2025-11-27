@@ -9,6 +9,8 @@ import { walletRouter } from "./routes/walletRoutes.js";
 import { cardRouter } from "./routes/cardRoutes.js";
 import { baasWebhookRouter } from "./routes/baasWebhookRoutes.js";
 import { ledgerRouter } from "./routes/ledgerRoutes.js";
+import { onboardingRouter } from "./routes/onboardingRoutes.js";
+import { syncteraWebhookRouter } from "./routes/syncteraWebhookRoutes.js";
 
 // Mock ledger routes for testing
 import { mockLedger } from "./tests/mocks/ledger/mockLedgerIndex.js";
@@ -40,6 +42,12 @@ export function createApp(): Application {
 
   // Ledger routes (real, non-mock)
   app.use("/ledger", ledgerRouter);
+
+  // Onboarding routes (KYC, etc.)
+  app.use("/onboarding", onboardingRouter);
+
+  // Synctera webhook
+  app.use("/webhooks/synctera", syncteraWebhookRouter);
 
   // Card routes (create cards for users)
   app.use("/", cardRouter);

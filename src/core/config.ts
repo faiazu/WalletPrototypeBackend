@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-export type BaasProvider = "MOCK" | "STRIPE_ISSUING";
+export type BaasProvider = "MOCK" | "STRIPE_ISSUING" | "SYNCTERA";
 
 const baasProviderEnv = process.env.BAAS_PROVIDER?.toUpperCase() as BaasProvider | undefined;
 
@@ -13,6 +13,11 @@ export const config = {
   stripe: {
     apiKey: process.env.STRIPE_API_KEY,
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+  },
+  synctera: {
+    apiKey: process.env.SYNCTERA_API_KEY,
+    baseUrl: process.env.SYNCTERA_BASE_URL || "https://api-sandbox.synctera.com/v0",
+    webhookSecret: process.env.SYNCTERA_WEBHOOK_SECRET,
   },
 };
 

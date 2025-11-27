@@ -14,6 +14,7 @@ enum BaasProviderName {
   LITHIC
   UNIT
   OTHER
+  SYNCTERA
 }
 
 enum AuthHoldStatus {

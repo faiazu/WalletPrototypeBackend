@@ -33,6 +33,8 @@ const baasClient = (() => {
 const providerName =
   config.baasProvider === "STRIPE_ISSUING"
     ? BaasProviderName.STRIPE_ISSUING
+    : config.baasProvider === "SYNCTERA"
+    ? BaasProviderName.SYNCTERA
     : BaasProviderName.MOCK;
 
 // Instantiate the high level BaasService that knows about Prisma + provider
