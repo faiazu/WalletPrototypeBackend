@@ -12,6 +12,7 @@ export { BaasProviderName };
  */
 export type BaasEventType =
   | "CARD_AUTH"
+  | "CARD_AUTH_REVERSAL"
   | "CARD_CLEARING"
   | "WALLET_FUNDING";
 
@@ -45,6 +46,26 @@ export interface NormalizedCardAuthEvent {
   occurredAt: Date;
 
   // Full raw provider payload (for audit/debug, not for core logic)
+  rawPayload: unknown;
+}
+
+/**
+ * Normalized shape for an auth reversal/void event.
+ * Used to release/mark holds when provider reverses an authorization.
+ */
+export interface NormalizedCardAuthReversalEvent {
+  provider: BaasProviderName;
+  type: "CARD_AUTH_REVERSAL";
+
+  providerEventId: string;
+  providerAuthId: string;        // original auth id to reverse
+  providerCardId: string;
+  providerCustomerId?: string;
+
+  amountMinor?: number;          // optional if provider sends amount on reversal
+  currency?: string;
+
+  occurredAt: Date;
   rawPayload: unknown;
 }
 
@@ -104,5 +125,6 @@ export interface NormalizedWalletFundingEvent {
  */
 export type NormalizedBaasEvent =
   | NormalizedCardAuthEvent
+  | NormalizedCardAuthReversalEvent
   | NormalizedCardClearingEvent
   | NormalizedWalletFundingEvent;

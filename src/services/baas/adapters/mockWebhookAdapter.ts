@@ -68,6 +68,21 @@ export const mockWebhookAdapter = {
       };
     }
 
+    if (type === "CARD_AUTH_REVERSAL") {
+      return {
+        provider: BaasProviderName.MOCK,
+        type: "CARD_AUTH_REVERSAL",
+        providerEventId: body.id ?? body.eventId ?? "unknown_auth_rev_event",
+        providerAuthId: body.authId ?? body.providerAuthId ?? body.txId ?? body.transactionId,
+        providerCardId: body.cardId ?? body.providerCardId,
+        providerCustomerId: body.customerId ?? body.providerCustomerId,
+        amountMinor: body.amountMinor ?? body.amount,
+        currency: body.currency,
+        occurredAt: new Date(body.occurredAt ?? body.createdAt ?? Date.now()),
+        rawPayload: body,
+      };
+    }
+
     if (type === "WALLET_FUNDING") {
       return {
         provider: BaasProviderName.MOCK,

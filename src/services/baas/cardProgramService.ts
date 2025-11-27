@@ -7,6 +7,7 @@ import type {
 
 import type {
   NormalizedCardAuthEvent,
+  NormalizedCardAuthReversalEvent,
   NormalizedCardClearingEvent,
 } from "./baasTypes.js";
 
@@ -55,6 +56,20 @@ export class CardProgramService {
   constructor(deps: CardProgramServiceDeps) {
     this.prisma = deps.prisma;
     this.ledger = deps.ledger;
+  }
+
+  /**
+   * Sum of pending holds for a wallet. Used to adjust available balance on auth.
+   */
+  private async getPendingHoldTotal(walletId: string): Promise<number> {
+    const result = await this.prisma.cardAuthHold.aggregate({
+      _sum: { amountMinor: true },
+      where: {
+        walletId,
+        status: AuthHoldStatus.PENDING,
+      },
+    });
+    return result._sum.amountMinor ?? 0;
   }
 
   /**
@@ -119,14 +134,18 @@ export class CardProgramService {
       return "DECLINE";
     }
 
-    // Check internal wallet_pool balance via ledger
+    // Check internal wallet_pool balance minus pending holds.
+    // Note: pool is stored as a liability (negative when funded), so negate it for available.
     const walletPoolBalance = await this.ledger.getWalletPoolBalance(walletId);
+    const pendingHolds = await this.getPendingHoldTotal(walletId);
+    const available = -walletPoolBalance - pendingHolds;
     const payingUserId = card.userId;
 
-    if (walletPoolBalance < event.amountMinor) {
+    if (available < event.amountMinor) {
       console.warn(
         `[CardProgramService] Authorization declined: insufficient funds. walletId=${walletId}, ` +
-          `balance=${walletPoolBalance}, requested=${event.amountMinor}`
+          `poolBalance=${walletPoolBalance}, pendingHolds=${pendingHolds}, available=${available}, ` +
+          `requested=${event.amountMinor}`
       );
       return "DECLINE";
     }
@@ -247,21 +266,24 @@ export class CardProgramService {
     const providerAuthId = event.providerAuthId ?? event.providerTransactionId;
     if (providerAuthId) {
       try {
-        await this.prisma.cardAuthHold.update({
+        const result = await this.prisma.cardAuthHold.updateMany({
           where: {
-            providerName_providerAuthId: {
-              providerName: event.provider,
-              providerAuthId,
-            },
+            providerName: event.provider,
+            providerAuthId,
           },
           data: {
             status: AuthHoldStatus.CLEARED,
             clearedAt: new Date(),
           },
         });
+        if (result.count === 0) {
+          console.warn(
+            `[CardProgramService] No matching auth hold to clear for providerAuthId=${providerAuthId}`
+          );
+        }
       } catch (err) {
         console.warn(
-          `[CardProgramService] No matching auth hold to clear for providerAuthId=${providerAuthId}: ${String(
+          `[CardProgramService] Failed clearing auth hold for providerAuthId=${providerAuthId}: ${String(
             err
           )}`
         );
@@ -272,5 +294,34 @@ export class CardProgramService {
       `[CardProgramService] Clearing posted to ledger: walletId=${walletId}, ` +
         `payingUserId=${payingUserId}, amountMinor=${event.amountMinor} ${event.currency}`
     );
+  }
+
+  /**
+   * Handle auth reversal/void by marking the hold reversed.
+   * No ledger movement (we don't post on auth).
+   */
+  async handleAuthReversal(event: NormalizedCardAuthReversalEvent): Promise<void> {
+    const providerAuthId = event.providerAuthId;
+    try {
+      await this.prisma.cardAuthHold.update({
+        where: {
+          providerName_providerAuthId: {
+            providerName: event.provider,
+            providerAuthId,
+          },
+        },
+        data: {
+          status: AuthHoldStatus.REVERSED,
+          reversedAt: new Date(),
+        },
+      });
+      console.log(
+        `[CardProgramService] Auth reversal processed: authId=${providerAuthId}, cardId=${event.providerCardId}`
+      );
+    } catch (err) {
+      console.warn(
+        `[CardProgramService] Auth reversal with no matching hold: authId=${providerAuthId}, cardId=${event.providerCardId}`
+      );
+    }
   }
 }

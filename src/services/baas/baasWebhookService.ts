@@ -10,6 +10,7 @@ import type {
 import type {
   NormalizedBaasEvent,
   NormalizedCardAuthEvent,
+  NormalizedCardAuthReversalEvent,
   NormalizedCardClearingEvent,
   NormalizedWalletFundingEvent,
 } from "./baasTypes.js";
@@ -142,6 +143,12 @@ export class BaasWebhookService {
       return;
     }
 
+    if (event.type === "CARD_AUTH_REVERSAL") {
+      await this.handleCardAuthReversal(event as NormalizedCardAuthReversalEvent);
+      await this.markEventProcessed(providerName, event.providerEventId);
+      return;
+    }
+
     if (event.type === "WALLET_FUNDING") {
       await this.handleWalletFunding(event as NormalizedWalletFundingEvent);
       await this.markEventProcessed(providerName, event.providerEventId);
@@ -157,13 +164,31 @@ export class BaasWebhookService {
   }
 
   /**
+   * Handle an auth reversal/void by marking the hold reversed.
+   */
+  private async handleCardAuthReversal(
+    event: NormalizedCardAuthReversalEvent
+  ): Promise<void> {
+    try {
+      await this.cardProgramService.handleAuthReversal(event);
+    } catch (err) {
+      console.warn(
+        `[BaasWebhookService] Failed to process auth reversal: authId=${event.providerAuthId}, ` +
+          `cardId=${event.providerCardId}, err=${String(err)}`
+      );
+    }
+  }
+
+  /**
    * Handle a CARD_AUTH event by delegating to CardProgramService.
    *
    * NOTE (Stripe vs Marqeta etc.):
    *  - For async webhooks (Stripe Issuing style), this is perfect: adapter
    *    normalizes event -> this method -> CardProgramService decides.
    */
-  private async handleCardAuth(event: NormalizedCardAuthEvent): Promise<void> {
+  private async handleCardAuth(
+    event: NormalizedCardAuthEvent
+  ): Promise<void> {
     const decision: CardAuthDecision =
       await this.cardProgramService.handleAuthorization(event);
 

@@ -12,6 +12,7 @@ import { baasWebhookRouter } from "./routes/baasWebhookRoutes.js";
 // Mock ledger routes for testing
 import { mockLedger } from "./tests/mocks/ledger/mockLedgerIndex.js";
 import { mockAuth } from "./tests/mocks/auth/mockAuthIndex.js";
+import { mockBaas } from "./tests/mocks/baas/mockBaasIndex.js";
 
 dotenv.config();
 
@@ -53,6 +54,9 @@ export function createApp(): Application {
     app.use("/test/auth/", mockAuth.login);
     app.use("/test/auth/", mockAuth.register);
     app.use("/test/auth/", mockAuth.listUsers);
+
+    // Mock BaaS debug routes
+    app.use("/test/baas/holds", mockBaas.holds);
   }
 
 
