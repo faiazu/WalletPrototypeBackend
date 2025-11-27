@@ -13,6 +13,7 @@ import type {
   NormalizedCardAuthReversalEvent,
   NormalizedCardClearingEvent,
   NormalizedWalletFundingEvent,
+  NormalizedKycVerificationEvent,
 } from "./baasTypes.js";
 
 import type { CardProgramService, CardAuthDecision } from "./cardProgramService.js";
@@ -149,6 +150,12 @@ export class BaasWebhookService {
       return;
     }
 
+    if (event.type === "KYC_VERIFICATION") {
+      await this.handleKycVerification(event as NormalizedKycVerificationEvent);
+      await this.markEventProcessed(providerName, event.providerEventId);
+      return;
+    }
+
     if (event.type === "WALLET_FUNDING") {
       await this.handleWalletFunding(event as NormalizedWalletFundingEvent);
       await this.markEventProcessed(providerName, event.providerEventId);
@@ -210,6 +217,36 @@ export class BaasWebhookService {
     console.log(
       `[BaasWebhookService] Card clearing handled: txId=${event.providerTransactionId}, ` +
         `cardId=${event.providerCardId}, amount=${event.amountMinor} ${event.currency}`
+    );
+  }
+
+  /**
+   * Handle a KYC_VERIFICATION event: update user kycStatus based on personId mapping.
+   */
+  private async handleKycVerification(
+    event: NormalizedKycVerificationEvent
+  ): Promise<void> {
+    const customer = await this.prisma.baasCustomer.findFirst({
+      where: {
+        externalCustomerId: event.personId,
+        providerName: event.provider,
+      },
+    });
+
+    if (!customer) {
+      console.warn(
+        `[BaasWebhookService] KYC verification: no user mapping found for personId=${event.personId}`
+      );
+      return;
+    }
+
+    await this.prisma.user.update({
+      where: { id: customer.userId },
+      data: { kycStatus: event.verificationStatus },
+    });
+
+    console.log(
+      `[BaasWebhookService] KYC status updated: userId=${customer.userId}, status=${event.verificationStatus}`
     );
   }
 

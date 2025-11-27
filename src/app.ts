@@ -24,6 +24,7 @@ export function createApp(): Application {
 
   // Webhooks need raw body (before express.json) to allow signature verification
   app.use("/webhooks/baas", baasWebhookRouter);
+  app.use("/webhooks/synctera", syncteraWebhookRouter);
 
   app.use(express.json());
 
@@ -45,9 +46,6 @@ export function createApp(): Application {
 
   // Onboarding routes (KYC, etc.)
   app.use("/onboarding", onboardingRouter);
-
-  // Synctera webhook
-  app.use("/webhooks/synctera", syncteraWebhookRouter);
 
   // Card routes (create cards for users)
   app.use("/", cardRouter);

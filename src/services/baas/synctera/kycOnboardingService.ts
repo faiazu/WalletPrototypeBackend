@@ -23,7 +23,7 @@ export interface KycInput {
   dob: string;
   phone_number: string;
   email: string;
-  ssn?: string;
+  ssn: string;
   legal_address: KycAddress;
   disclosures?: Array<{ type: string; version: string }>;
   customer_ip_address?: string;
