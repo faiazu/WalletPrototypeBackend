@@ -118,12 +118,12 @@ export class CardProgramService {
     }
 
     // Check internal wallet_pool balance via ledger
-    const poolBalanceMinor = await this.ledger.getWalletPoolBalance(walletId);
+    const walletPoolBalance = await this.ledger.getWalletPoolBalance(walletId);
 
-    if (poolBalanceMinor < event.amountMinor) {
+    if (walletPoolBalance < event.amountMinor) {
       console.warn(
         `[CardProgramService] Authorization declined: insufficient funds. walletId=${walletId}, ` +
-          `balanceMinor=${poolBalanceMinor}, requested=${event.amountMinor}`
+          `balance=${walletPoolBalance}, requested=${event.amountMinor}`
       );
       return "DECLINE";
     }

@@ -62,11 +62,9 @@ export class MockBaasClient implements BaasClient {
   }
 
   async createCard(params: CreateCardParams): Promise<CreateCardResult> {
-    const externalCardId = `mock_card_${params.userId}`;
-
     return {
       provider: this.provider,
-      externalCardId,
+      externalCardId: params.externalCustomerId.replace("cust", "card"),
       last4: "4242",
     };
   }

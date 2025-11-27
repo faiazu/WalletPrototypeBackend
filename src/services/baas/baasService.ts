@@ -97,7 +97,7 @@ export class BaasService {
     externalCardId: string;
     last4?: string;
   }> {
-    // 1) Ensure user exists + belongs to this wallet (optional but recommended)
+    // 1) Ensure user exists + belongs to this wallet
     const walletMember = await this.prisma.walletMember.findFirst({
       where: {
         walletId,

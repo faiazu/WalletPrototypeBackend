@@ -7,6 +7,7 @@ import { authRouter } from "./routes/authRoutes.js";
 import { userRouter } from "./routes/userRoutes.js";
 import { walletRouter } from "./routes/walletRoutes.js";
 import { cardRouter } from "./routes/cardRoutes.js";
+import { baasWebhookRouter } from "./routes/baasWebhookRoutes.js";
 
 // Mock ledger routes for testing
 import { mockLedger } from "./tests/mocks/ledger/mockLedgerIndex.js";
@@ -18,6 +19,10 @@ export function createApp(): Application {
   const app = express();
 
   app.use(cors());
+
+  // Webhooks need raw body (before express.json) to allow signature verification
+  app.use("/webhooks/baas", baasWebhookRouter);
+
   app.use(express.json());
 
   app.get("/health", (req: Request, res: Response) => {

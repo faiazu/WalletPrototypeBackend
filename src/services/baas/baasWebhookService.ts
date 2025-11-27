@@ -162,9 +162,6 @@ export class BaasWebhookService {
    * NOTE (Stripe vs Marqeta etc.):
    *  - For async webhooks (Stripe Issuing style), this is perfect: adapter
    *    normalizes event -> this method -> CardProgramService decides.
-   *  - For true "dynamic auth" where the provider expects a decision in the
-   *    HTTP response, your Express route will call CardProgramService
-   *    directly and build the JSON response. This service is for async flows.
    */
   private async handleCardAuth(event: NormalizedCardAuthEvent): Promise<void> {
     const decision: CardAuthDecision =
