@@ -1,4 +1,5 @@
 import { prisma } from "../../core/db.js";
+import type { LedgerAccount } from "../../generated/prisma/client.js";
 import { postingEngine } from "./postingEngine.js";
 
 export const ledgerService = {
@@ -6,7 +7,7 @@ export const ledgerService = {
   //
   // Get ledger accounts for convenience
   //
-  async getAccountById(accountId: string) {
+  async getAccountById(accountId: string): Promise<LedgerAccount> {
     const account = await prisma.ledgerAccount.findUnique({
       where: { id: accountId }
     });
@@ -15,7 +16,7 @@ export const ledgerService = {
     return account;
   },
 
-  async getMemberEquityAccount(walletId: string, userId: string) {
+  async getMemberEquityAccount(walletId: string, userId: string): Promise<LedgerAccount> {
     const account = await prisma.ledgerAccount.findFirst({
       where: {
         walletId,
@@ -27,7 +28,7 @@ export const ledgerService = {
     return account;
   },
 
-  async getWalletPoolAccount(walletId: string) {
+  async getWalletPoolAccount(walletId: string): Promise<LedgerAccount> {
     const account = await prisma.ledgerAccount.findFirst({
       where: {
         walletId,
@@ -39,10 +40,16 @@ export const ledgerService = {
     return account;
   },
 
-  async getWalletLedgerAccounts(walletId: string) {
+  async getWalletLedgerAccounts(walletId: string): Promise<LedgerAccount[]> {
     return prisma.ledgerAccount.findMany({
       where: { walletId: walletId }
     });
+  },
+
+  // get wallet_pool balance
+  async getWalletPoolBalance(walletId: string): Promise<number> {
+    const pool: LedgerAccount = await this.getWalletPoolAccount(walletId);
+    return pool.balance;
   },
 
   //
@@ -127,45 +134,55 @@ export const ledgerService = {
   },
 
   //
-  // CARD PURCHASE CAPTURE
-  // For each member allocation:
+  // NEW: CARD PURCHASE CAPTURE
+  //
+  // For each split:
   //   Debit: member_equity[user]
   //   Credit: wallet_pool
   //
-  // NOTE: Splitting logic happens before calling this.
+  // Splitting logic (who pays what) happens BEFORE calling this.
   //
+
   async postCardCapture({
     transactionId,
     walletId,
     splits,
-    metadata
+    metadata,
   }: {
-    transactionId: string,
-    walletId: string,
-    splits: Array<{ userId: string; amount: number }>,
-    metadata?: any
+    transactionId: string;
+    walletId: string;
+    splits: Array<{ userId: string; amount: number }>;
+    metadata?: any;
   }) {
-
     const pool = await this.getWalletPoolAccount(walletId);
 
-    const entries = [];
+    const entries: Array<{
+      debitAccountId: string;
+      creditAccountId: string;
+      amount: number;
+      metadata?: any;
+    }> = [];
 
-    for (const s of splits) {
-      const equity = await this.getMemberEquityAccount(walletId, s.userId);
+    for (const split of splits) {
+      const equity = await this.getMemberEquityAccount(walletId, split.userId);
 
       entries.push({
         debitAccountId: equity.id,
         creditAccountId: pool.id,
-        amount: s.amount,
+        amount: split.amount,
         metadata: {
           type: "card_capture",
-          userId: s.userId,
-          ...metadata
-        }
+          walletId,
+          userId: split.userId,
+          ...metadata,
+        },
       });
     }
 
-    return postingEngine.post({ transactionId, entries });
+    return postingEngine.post({
+      transactionId,
+      entries,
+    });
   },
 
   //

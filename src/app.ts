@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import { authRouter } from "./routes/authRoutes.js";
 import { userRouter } from "./routes/userRoutes.js";
 import { walletRouter } from "./routes/walletRoutes.js";
+import { cardRouter } from "./routes/cardRoutes.js";
 
 // Mock ledger routes for testing
 import { mockLedger } from "./tests/mocks/ledger/mockLedgerIndex.js";
@@ -32,6 +33,8 @@ export function createApp(): Application {
   // Wallet routes (create/invite/join/get)
   app.use("/wallet", walletRouter);
 
+  // Card routes (create cards for users)
+  app.use("/cards", cardRouter);
 
   // Mock ledger routes for testing
   if (process.env.NODE_ENV !== "production") {

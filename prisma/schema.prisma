@@ -123,3 +123,16 @@ model BaasCard {
   baasCustomer   BaasCustomer? @relation(fields: [baasCustomerId], references: [id])
   baasCustomerId String?
 }
+
+model BaasEvent {
+  id             String           @id @default(cuid())
+  providerName   BaasProviderName
+  providerEventId String
+  type           String           // e.g. "CARD_AUTH", "CARD_CLEARING", "WALLET_FUNDING"
+  payload        Json
+  processedAt    DateTime?
+  createdAt      DateTime         @default(now())
+
+  @@unique([providerName, providerEventId])
+}
+
