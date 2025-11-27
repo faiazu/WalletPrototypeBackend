@@ -16,11 +16,24 @@ export async function isMember(walletId: string, userId: string): Promise<boolea
 }
 
 export async function addMember(walletId: string, userId: string, role: string = "member"): Promise<WalletMember> {
-  return prisma.walletMember.create({
-    data: {
-      walletId,
-      userId,
-      role,
-    },
+  return prisma.$transaction(async (tx) => {
+    const member = await tx.walletMember.create({
+      data: {
+        walletId,
+        userId,
+        role,
+      },
+    });
+
+    await tx.ledgerAccount.create({
+      data: {
+        walletId,
+        userId,
+        type: "member_equity",
+        balance: 0,
+      },
+    });
+
+    return member;
   });
 }
