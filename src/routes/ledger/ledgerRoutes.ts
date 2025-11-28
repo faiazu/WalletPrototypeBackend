@@ -1,10 +1,10 @@
 import express from "express";
 import { z } from "zod";
 
-import { authMiddleware } from "../core/authMiddleware.js";
-import { ledgerService } from "../services/ledger/ledgerService.js";
-import { isMember } from "../services/memberService.js";
-import { LedgerReconciliationService } from "../services/ledger/ledgerReconciliation.js";
+import { authMiddleware } from "../../core/authMiddleware.js";
+import { ledgerService } from "../../services/ledger/ledgerService.js";
+import { LedgerReconciliationService } from "../../services/ledger/ledgerReconciliation.js";
+import { isMember } from "../../services/memberService.js";
 
 const router = express.Router();
 
@@ -159,8 +159,6 @@ router.post("/:walletId/adjustment", authMiddleware, async (req, res) => {
   }
 });
 
-export { router as ledgerRouter };
-
 // GET /ledger/:walletId/reconciliation
 router.get("/:walletId/reconciliation", authMiddleware, async (req, res) => {
   try {
@@ -181,3 +179,5 @@ router.get("/:walletId/reconciliation", authMiddleware, async (req, res) => {
     return res.status(400).json({ error: err.message || "Reconciliation failed" });
   }
 });
+
+export { router as ledgerRouter };

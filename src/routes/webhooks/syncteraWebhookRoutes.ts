@@ -1,8 +1,8 @@
 import express from "express";
 
-import { Debugger } from "../core/debugger.js";
-import { baasWebhookService } from "../core/dependencies.js";
-import { syncteraWebhookAdapter } from "../services/baas/adapters/syncteraWebhookAdapter.js";
+import { Debugger } from "../../core/debugger.js";
+import { baasWebhookService } from "../../core/dependencies.js";
+import { syncteraWebhookAdapter } from "../../services/baas/adapters/syncteraWebhookAdapter.js";
 
 const router = express.Router();
 

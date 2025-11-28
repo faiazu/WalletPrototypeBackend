@@ -1,18 +1,13 @@
 import express from "express";
 import { z } from "zod";
 
-import { authMiddleware } from "../core/authMiddleware.js";
-import { addMember, isMember } from "../services/memberService.js";
-import { requireUserByEmail } from "../services/userService.js";
-import {
-  walletService,
-} from "../services/walletService.js";
+import { authMiddleware } from "../../core/authMiddleware.js";
+import { addMember, isMember } from "../../services/memberService.js";
+import { requireUserByEmail } from "../../services/userService.js";
+import { walletService } from "../../services/walletService.js";
 
 const router = express.Router();
 
-//
-// Validation
-//
 const createWalletSchema = z.object({
   name: z.string().min(1, "Wallet name is required"),
 });
@@ -22,28 +17,19 @@ const inviteSchema = z.object({
   role: z.string().optional(),
 });
 
-//
 // CREATE WALLET
-//
 router.post("/create", authMiddleware, async (req, res) => {
   try {
     const userId = req.userId!;
     const { name } = createWalletSchema.parse(req.body);
 
-    console.log(`💡 Creating wallet "${name}" for user ${userId}`);
-
     const result = await walletService.createWallet({
       name: name,
-      adminUserId: userId
+      adminUserId: userId,
     });
 
-    console.log(`💡 Wallet "${name}" created with ID ${result.wallet.id}`);
-
     return res.status(201).json(result);
-
   } catch (err: any) {
-    console.error("Error creating wallet:", err);
-
     if (err.name === "ZodError")
       return res.status(400).json({ error: "Invalid request body", details: err.errors });
 
@@ -51,9 +37,7 @@ router.post("/create", authMiddleware, async (req, res) => {
   }
 });
 
-//
 // INVITE MEMBER
-//
 router.post("/:id/invite", authMiddleware, async (req, res) => {
   try {
     const userId: string = req.userId!;
@@ -76,9 +60,7 @@ router.post("/:id/invite", authMiddleware, async (req, res) => {
     const member = await addMember(walletId, invitee.id, role || "member");
 
     return res.status(201).json({ member });
-
   } catch (err: any) {
-    console.error("Error inviting member:", err);
     if (err.name === "ZodError") {
       return res.status(400).json({ error: "Invalid request body", details: err.errors });
     }
@@ -87,9 +69,7 @@ router.post("/:id/invite", authMiddleware, async (req, res) => {
   }
 });
 
-//
 // JOIN WALLET
-//
 router.post("/:id/join", authMiddleware, async (req, res) => {
   try {
     const userId = req.userId!;
@@ -104,16 +84,12 @@ router.post("/:id/join", authMiddleware, async (req, res) => {
     const member = await addMember(walletId, userId, "member");
 
     return res.status(201).json({ member });
-
   } catch (err: any) {
-    console.error("Error joining wallet:", err);
     return res.status(400).json({ error: err.message || "Failed to join wallet" });
   }
 });
 
-//
 // GET WALLET DETAILS
-//
 router.get("/:id", authMiddleware, async (req, res) => {
   try {
     const userId = req.userId!;
@@ -122,16 +98,12 @@ router.get("/:id", authMiddleware, async (req, res) => {
     const wallet = await walletService.getWalletDetails(walletId);
     if (!wallet) return res.status(404).json({ error: "Wallet not found" });
 
-    // check membership or admin
     const admin = await walletService.isWalletAdmin(walletId, userId);
     const member = await isMember(walletId, userId);
-    if (!admin && !member)
-      return res.status(403).json({ error: "Access denied" });
+    if (!admin && !member) return res.status(403).json({ error: "Access denied" });
 
     return res.json({ wallet });
-
   } catch (err: any) {
-    console.error("Error fetching wallet:", err);
     return res.status(400).json({ error: err.message || "Failed to fetch wallet" });
   }
 });

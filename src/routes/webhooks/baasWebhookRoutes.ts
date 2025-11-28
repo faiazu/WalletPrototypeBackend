@@ -1,7 +1,7 @@
 import express, { Router } from "express";
 
-import { baasWebhookService } from "../core/dependencies.js";
-import { mockWebhookAdapter } from "../services/baas/adapters/mockWebhookAdapter.js";
+import { baasWebhookService } from "../../core/dependencies.js";
+import { mockWebhookAdapter } from "../../services/baas/adapters/mockWebhookAdapter.js";
 
 const router = Router();
 

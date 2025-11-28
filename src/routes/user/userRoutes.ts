@@ -1,19 +1,17 @@
 import express from "express";
-import { prisma } from "../core/db.js";
-import { authMiddleware } from "../core/authMiddleware.js";
+
+import { authMiddleware } from "../../core/authMiddleware.js";
+import { prisma } from "../../core/db.js";
 
 const router = express.Router();
 
-/*
- GET /me
- - Requires Authorization: Bearer <token>
- - Uses req.userId set by authMiddleware
- - Returns { id, email } of the current user
-*/
+/**
+ * GET /user/me
+ * Returns the current authenticated user's id and email.
+ */
 router.get("/me", authMiddleware, async (req, res) => {
   const userId = req.userId;
 
-  // This should never happen if authMiddleware works, but just in case
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
   }

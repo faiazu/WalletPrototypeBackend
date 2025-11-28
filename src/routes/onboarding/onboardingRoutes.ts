@@ -1,8 +1,8 @@
 import express from "express";
 import { z } from "zod";
 
-import { authMiddleware } from "../core/authMiddleware.js";
-import { completeUserKyc } from "../services/baas/synctera/kycOnboardingService.js";
+import { authMiddleware } from "../../core/authMiddleware.js";
+import { completeUserKyc } from "../../services/baas/synctera/kycOnboardingService.js";
 
 const router = express.Router();
 
@@ -37,7 +37,6 @@ router.post("/kyc", authMiddleware, async (req, res) => {
     const userId = req.userId!;
     const input = kycSchema.parse(req.body);
 
-    // Ensure optional fields that backend expects as non-optional are normalized
     const kycInput = {
       ...input,
       disclosures: input.disclosures ?? [],
