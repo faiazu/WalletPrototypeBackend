@@ -1,16 +1,46 @@
-import { Router } from "express";
+import type { Request, Response } from "express";
 
-import { authMiddleware } from "../../core/authMiddleware.js";
-import { prisma } from "../../core/db.js";
 import { Debugger } from "../../core/debugger.js";
+import { prisma } from "../../core/db.js";
+import { baasService } from "../../core/dependencies.js";
 import { BaasProviderName } from "../../generated/prisma/enums.js";
+import { authMiddleware } from "../../core/authMiddleware.js";
 import { syncteraWidgetService } from "../../services/baas/synctera/syncteraWidgetService.js";
-
-const router = Router();
+import { issueCardParamsSchema, widgetQuerySchema } from "./validator.js";
 
 /**
- * Ensure the user is a member of the wallet linked to the card and
- * gather Synctera IDs needed for widget/token calls.
+ * Issue a card for the authenticated user and link to wallet.
+ */
+export const issueCard = [
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId;
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const { walletId } = issueCardParamsSchema.parse({ walletId: req.params.walletId });
+      const card = await baasService.createCardForUser(userId, walletId);
+
+      return res.status(201).json(card);
+    } catch (err: any) {
+      if (err?.message === "UserNotMemberOfWallet") {
+        return res.status(403).json({ error: "UserNotMemberOfWallet" });
+      }
+      if (err?.message === "AccountCreationNotSupported") {
+        return res.status(400).json({ error: "AccountCreationNotSupported" });
+      }
+      if (typeof err?.message === "string" && err.message.includes("Synctera card issuance")) {
+        return res.status(400).json({ error: err.message });
+      }
+      return res.status(500).json({ error: err?.message ?? "Failed to issue card" });
+    }
+  },
+];
+
+/**
+ * Internal helper to authorize card access and gather Synctera identifiers.
  */
 async function resolveCardContext(cardId: string, userId: string): Promise<{
   baasCardId: string;
@@ -77,13 +107,11 @@ async function resolveCardContext(cardId: string, userId: string): Promise<{
 }
 
 /**
- * GET /cards/:cardId/widget-url?widgetType=activate_card|set_pin
- * Returns a widget URL for PCI-safe activation or PIN flows.
+ * GET widget URL for activation or set_pin.
  */
-router.get(
-  "/cards/:cardId/widget-url",
+export const getWidgetUrl = [
   authMiddleware,
-  async (req, res, next) => {
+  async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
       const cardId = req.params.cardId;
@@ -91,20 +119,21 @@ router.get(
         return res.status(400).json({ error: "CardIdRequired" });
       }
 
-      const widgetTypeParam = (req.query.widgetType as string) ?? "set_pin";
-      const widgetType =
-        widgetTypeParam === "activate_card" ? "activate_card" : "set_pin";
+      const { widgetType } = widgetQuerySchema.parse({
+        widgetType: req.query.widgetType,
+      });
+      const normalizedWidgetType = widgetType ?? "set_pin";
 
       const ctx = await resolveCardContext(cardId, userId);
       const result = await syncteraWidgetService.getCardWidgetUrl({
         cardId: ctx.externalCardId,
         accountId: ctx.accountId,
         customerId: ctx.customerId,
-        widgetType,
+        widgetType: normalizedWidgetType,
       });
 
       Debugger.logInfo(
-        `[CardRoutes] Widget URL generated for card=${ctx.externalCardId}, widgetType=${widgetType}`
+        `[CardRoutes] Widget URL generated for card=${ctx.externalCardId}, widgetType=${normalizedWidgetType}`
       );
 
       return res.status(200).json(result);
@@ -118,19 +147,17 @@ router.get(
       if (err?.message === "AccountNotFound" || err?.message === "CustomerNotFound") {
         return res.status(400).json({ error: err.message });
       }
-      next(err);
+      return res.status(500).json({ error: err?.message ?? "Failed to get widget URL" });
     }
-  }
-);
+  },
+];
 
 /**
- * POST /cards/:cardId/client-token
- * Returns a client token to use with Synctera PCI widgets (PAN/PIN display).
+ * POST client token for PAN/PIN widget usage.
  */
-router.post(
-  "/cards/:cardId/client-token",
+export const postClientToken = [
   authMiddleware,
-  async (req, res, next) => {
+  async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
       const cardId = req.params.cardId;
@@ -159,19 +186,17 @@ router.post(
       if (err?.message === "AccountNotFound" || err?.message === "CustomerNotFound") {
         return res.status(400).json({ error: err.message });
       }
-      next(err);
+      return res.status(500).json({ error: err?.message ?? "Failed to get client token" });
     }
-  }
-);
+  },
+];
 
 /**
- * POST /cards/:cardId/single-use-token
- * Returns a single-use token for one-time card widget interactions.
+ * POST single-use token for one-time widget interactions.
  */
-router.post(
-  "/cards/:cardId/single-use-token",
+export const postSingleUseToken = [
   authMiddleware,
-  async (req, res, next) => {
+  async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
       const cardId = req.params.cardId;
@@ -201,9 +226,7 @@ router.post(
       if (err?.message === "AccountNotFound" || err?.message === "CustomerNotFound") {
         return res.status(400).json({ error: err.message });
       }
-      next(err);
+      return res.status(500).json({ error: err?.message ?? "Failed to get single-use token" });
     }
-  }
-);
-
-export { router as cardWidgetRoutes };
+  },
+];

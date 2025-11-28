@@ -3,7 +3,7 @@ import express, { type Application } from "express";
 import { authRoutes } from "../domain/auth/routes.js";
 import { userRoutes } from "../domain/user/routes.js";
 import { walletRoutes } from "../domain/wallet/routes.js";
-import { cardRouter } from "./cards/index.js";
+import { cardRoutes } from "../domain/cards/routes.js";
 import { baasWebhookRouter } from "./webhooks/baasWebhookRoutes.js";
 import { ledgerRoutes } from "../domain/ledger/routes.js";
 import { onboardingRoutes } from "../domain/onboarding/routes.js";
@@ -30,5 +30,5 @@ export function registerApiRoutes(app: Application) {
   app.use("/onboarding", onboardingRoutes);
 
   // Card routes (issue, widgets)
-  app.use("/", cardRouter);
+  app.use("/", cardRoutes);
 }
