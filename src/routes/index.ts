@@ -2,10 +2,10 @@ import express, { type Application } from "express";
 
 import { authRouter } from "./auth/authRoutes.js";
 import { userRouter } from "./user/userRoutes.js";
-import { walletRouter } from "./wallet/walletRoutes.js";
+import { walletRoutes } from "../domain/wallet/routes.js";
 import { cardRouter } from "./cards/index.js";
 import { baasWebhookRouter } from "./webhooks/baasWebhookRoutes.js";
-import { ledgerRouter } from "./ledger/ledgerRoutes.js";
+import { ledgerRoutes } from "../domain/ledger/routes.js";
 import { onboardingRouter } from "./onboarding/onboardingRoutes.js";
 import { syncteraWebhookRouter } from "./webhooks/syncteraWebhookRoutes.js";
 
@@ -25,8 +25,8 @@ export function registerApiRoutes(app: Application) {
 
   app.use("/auth", authRouter);
   app.use("/user", userRouter);
-  app.use("/wallet", walletRouter);
-  app.use("/ledger", ledgerRouter);
+  app.use("/wallet", walletRoutes);
+  app.use("/ledger", ledgerRoutes);
   app.use("/onboarding", onboardingRouter);
 
   // Card routes (issue, widgets)
