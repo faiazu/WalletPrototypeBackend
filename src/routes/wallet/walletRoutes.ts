@@ -2,9 +2,9 @@ import express from "express";
 import { z } from "zod";
 
 import { authMiddleware } from "../../core/authMiddleware.js";
-import { addMember, isMember } from "../../services/memberService.js";
-import { requireUserByEmail } from "../../services/userService.js";
-import { walletService } from "../../services/walletService.js";
+import { addMember, isMember } from "../../services/wallet/memberService.js";
+import { requireUserByEmail } from "../../services/user/userService.js";
+import { walletService } from "../../services/wallet/walletService.js";
 
 const router = express.Router();
 

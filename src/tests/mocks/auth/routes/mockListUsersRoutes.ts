@@ -1,7 +1,7 @@
 // GET /test/auth/users
 import express from "express";
 
-import { listUsers } from "../../../../services/userService.js";
+import { listUsers } from "../../../../services/user/userService.js";
 
 const router = express.Router();
 

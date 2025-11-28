@@ -1,13 +1,13 @@
-import { LoginTicket, OAuth2Client, type TokenPayload } from "google-auth-library";
-import { prisma } from "../core/db.js";
-import { signAccessToken } from "../core/jwt.js";
+import { LoginTicket, OAuth2Client } from "google-auth-library";
+
+import { prisma } from "../../core/db.js";
+import { signAccessToken } from "../../core/jwt.js";
 
 if (!process.env.GOOGLE_CLIENT_ID) {
   throw new Error("Missing GOOGLE_CLIENT_ID in environment");
 }
 
 const GOOGLE_CLIENT_ID: string = process.env.GOOGLE_CLIENT_ID;
-
 const googleClient: OAuth2Client = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 export async function signInWithGoogle(idToken: string) {
@@ -50,4 +50,3 @@ export async function signInWithGoogle(idToken: string) {
     token,
   };
 }
-

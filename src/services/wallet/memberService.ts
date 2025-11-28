@@ -1,5 +1,5 @@
-import { prisma } from "../core/db.js";
-import type { WalletMember } from "../generated/prisma/client.js";
+import { prisma } from "../../core/db.js";
+import type { WalletMember } from "../../generated/prisma/client.js";
 
 export async function getMember(walletId: string, userId: string): Promise<WalletMember | null> {
   return prisma.walletMember.findFirst({

@@ -1,8 +1,8 @@
 import express from "express";
 import { z } from "zod";
 
-import { ensureUserByEmail } from "../../../../services/userService.js";
-import { issueTokenForUser } from "../../../../services/authService.js";
+import { ensureUserByEmail } from "../../../../services/user/userService.js";
+import { issueTokenForUser } from "../../../../services/auth/authService.js";
 
 const router = express.Router();
 

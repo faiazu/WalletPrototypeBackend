@@ -3,7 +3,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 
 import { authMiddleware } from "../../../../core/authMiddleware.js";
-import { walletService } from "../../../../services/walletService.js";
+import { walletService } from "../../../../services/wallet/walletService.js";
 import { LedgerReconciliationService, type LedgerReconciliationResult } from "../../../../services/ledger/ledgerReconciliation.js";
 
 const router = express.Router();

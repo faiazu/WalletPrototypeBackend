@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { prisma } from "../../core/db.js";
 import { signAccessToken } from "../../core/jwt.js";
-import { signInWithGoogle } from "../../services/googleAuthService.js";
+import { signInWithGoogle } from "../../services/auth/googleAuthService.js";
 
 const router = Router();
 

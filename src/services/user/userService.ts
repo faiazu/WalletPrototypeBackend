@@ -1,9 +1,9 @@
-import { prisma } from "../core/db.js";
-import type { User } from "../generated/prisma/client.js";
+import { prisma } from "../../core/db.js";
+import type { User } from "../../generated/prisma/client.js";
 import {
   deactivateSyncteraPersonForUser,
   linkUserToSynctera,
-} from "./baas/synctera/userSyncteraService.js";
+} from "../baas/synctera/userSyncteraService.js";
 
 export async function getUserById(id: string): Promise<User | null> {
   return prisma.user.findUnique({ where: { id } });

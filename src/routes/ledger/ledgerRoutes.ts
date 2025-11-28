@@ -4,7 +4,7 @@ import { z } from "zod";
 import { authMiddleware } from "../../core/authMiddleware.js";
 import { ledgerService } from "../../services/ledger/ledgerService.js";
 import { LedgerReconciliationService } from "../../services/ledger/ledgerReconciliation.js";
-import { isMember } from "../../services/memberService.js";
+import { isMember } from "../../services/wallet/memberService.js";
 
 const router = express.Router();
 
