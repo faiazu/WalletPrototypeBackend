@@ -4,17 +4,16 @@ import { authRoutes } from "../domain/auth/routes.js";
 import { userRoutes } from "../domain/user/routes.js";
 import { walletRoutes } from "../domain/wallet/routes.js";
 import { cardRoutes } from "../domain/cards/routes.js";
-import { baasWebhookRouter } from "./webhooks/baasWebhookRoutes.js";
 import { ledgerRoutes } from "../domain/ledger/routes.js";
 import { onboardingRoutes } from "../domain/onboarding/routes.js";
-import { syncteraWebhookRouter } from "./webhooks/syncteraWebhookRoutes.js";
+import { baasRouter, syncteraRouter } from "../domain/webhooks/routes.js";
 
 /**
  * Register webhook routes (mounted before express.json to preserve raw bodies).
  */
 export function registerWebhookRoutes(app: Application) {
-  app.use("/webhooks/baas", baasWebhookRouter);
-  app.use("/webhooks/synctera", syncteraWebhookRouter);
+  app.use("/webhooks/baas", baasRouter);
+  app.use("/webhooks/synctera", syncteraRouter);
 }
 
 /**
