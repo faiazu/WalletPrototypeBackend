@@ -31,4 +31,4 @@ router.get("/me", authMiddleware, async (req, res) => {
   return res.json(user);
 });
 
-export { router as userRouter };
+export { router as userRoutes };

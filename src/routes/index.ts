@@ -1,12 +1,12 @@
 import express, { type Application } from "express";
 
-import { authRouter } from "./auth/authRoutes.js";
-import { userRouter } from "./user/userRoutes.js";
+import { authRoutes } from "../domain/auth/routes.js";
+import { userRoutes } from "../domain/user/routes.js";
 import { walletRoutes } from "../domain/wallet/routes.js";
 import { cardRouter } from "./cards/index.js";
 import { baasWebhookRouter } from "./webhooks/baasWebhookRoutes.js";
 import { ledgerRoutes } from "../domain/ledger/routes.js";
-import { onboardingRouter } from "./onboarding/onboardingRoutes.js";
+import { onboardingRoutes } from "../domain/onboarding/routes.js";
 import { syncteraWebhookRouter } from "./webhooks/syncteraWebhookRoutes.js";
 
 /**
@@ -23,11 +23,11 @@ export function registerWebhookRoutes(app: Application) {
 export function registerApiRoutes(app: Application) {
   app.use(express.json());
 
-  app.use("/auth", authRouter);
-  app.use("/user", userRouter);
+  app.use("/auth", authRoutes);
+  app.use("/user", userRoutes);
   app.use("/wallet", walletRoutes);
   app.use("/ledger", ledgerRoutes);
-  app.use("/onboarding", onboardingRouter);
+  app.use("/onboarding", onboardingRoutes);
 
   // Card routes (issue, widgets)
   app.use("/", cardRouter);
