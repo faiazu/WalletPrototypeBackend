@@ -52,6 +52,7 @@ export interface CreateCardParams {
   externalAccountId?: string; // provider’s account id (if required by provider)
   cardProductId?: string;     // provider-specific card product/program id
   cardType?: string;          // e.g. VIRTUAL/PHYSICAL
+  embossName?: string;        // formatted name for embossing
 }
 
 /**

@@ -19,6 +19,7 @@ import type {
   BaasClient,
 } from "./baasClient.js";
 import { supportsAccountCreation } from "./baasClient.js";
+import { buildEmbossName } from "./synctera/embossNameHelper.js";
 
 export class BaasService {
   private prisma: PrismaClient;
@@ -199,6 +200,12 @@ export class BaasService {
       throw new Error("UserNotMemberOfWallet");
     }
 
+    // Fetch user details for embossing and context
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true },
+    });
+
     // 2) Ensure a BaaS customer exists for this user
     const { provider, externalCustomerId, baasCustomerId } =
       await this.ensureCustomerForUser(userId);
@@ -211,6 +218,7 @@ export class BaasService {
       userId,
       externalCustomerId,
       externalAccountId: account.externalAccountId,
+      embossName: buildEmbossName(user?.name, user?.email),
       // later you can add params like spending limits here
     } as CreateCardParams);
 

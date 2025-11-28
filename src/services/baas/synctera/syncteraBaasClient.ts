@@ -3,6 +3,7 @@ import { config } from "../../../core/config.js";
 import {
   BaasProviderName,
 } from "../../../generated/prisma/enums.js";
+import { randomUUID } from "crypto";
 import type {
   BaasClient,
   CreateAccountParams,
@@ -106,21 +107,47 @@ export class SyncteraBaasClient implements BaasClient {
       type: params.cardType ?? "VIRTUAL",
       customer_id: params.externalCustomerId,
       account_id: params.externalAccountId,
+      emboss_name: params.embossName,
       status: "ACTIVE",
     };
 
     const res = await client.post("/cards", payload);
     const data = res.data ?? {};
+    const cardId = data.id ?? data.card_id ?? data.token;
+    let finalStatus: string | undefined = data.card_status ?? data.status ?? "ACTIVE";
+
+    // If the card comes back UNACTIVATED (some providers), activate immediately for smooth UX.
+    if (cardId && finalStatus === "UNACTIVATED") {
+      try {
+        const idempotencyKey = randomUUID();
+        const activationRes = await client.patch(
+          `/cards/${cardId}`,
+          { card_status: "ACTIVE" },
+          { headers: { "Idempotency-Key": idempotencyKey } }
+        );
+        finalStatus =
+          activationRes.data?.card_status ??
+          activationRes.data?.status ??
+          "ACTIVE";
+        Debugger.logInfo(
+          `[SyncteraBaasClient] Auto-activated card ${cardId} after issuance`
+        );
+      } catch (err: any) {
+        Debugger.logWarn(
+          `[SyncteraBaasClient] Auto-activation failed for card ${cardId}: ${err?.message || err}`
+        );
+      }
+    }
 
     Debugger.logInfo(
-      `[SyncteraBaasClient] Issued card ${data.id ?? data.card_id ?? "unknown"} for customer ${params.externalCustomerId}`
+      `[SyncteraBaasClient] Issued card ${cardId ?? "unknown"} for customer ${params.externalCustomerId}`
     );
 
     return {
       provider: this.provider,
-      externalCardId: data.id ?? data.card_id ?? data.token,
+      externalCardId: cardId,
       last4: data.pan_last_four ?? data.last4 ?? data.last_four,
-      status: data.status ?? "ACTIVE",
+      status: finalStatus ?? "ACTIVE",
     };
   }
 }

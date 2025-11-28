@@ -346,9 +346,10 @@ export class BaasWebhookService {
       where: {
         providerName: event.provider,
         providerAccountId: event.providerAccountId,
-        reference: {
-          in: [referenceValue, null],
-        },
+        OR:
+          referenceValue === ""
+            ? [{ reference: "" }, { reference: null }]
+            : [{ reference: referenceValue }],
       },
     });
 
