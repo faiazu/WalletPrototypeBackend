@@ -2,7 +2,7 @@ import express, { type Application, type Request, type Response } from "express"
 import cors from "cors";
 
 import "./core/config.js";
-import { registerApiRoutes, registerWebhookRoutes } from "./routes/index.js";
+import { registerApiRoutes, registerWebhookRoutes } from "./routers.js";
 
 // Mock ledger routes for testing
 import { mockLedger } from "./tests/mocks/ledger/mockLedgerIndex.js";

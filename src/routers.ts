@@ -1,12 +1,12 @@
 import express, { type Application } from "express";
 
-import { authRoutes } from "../domain/auth/routes.js";
-import { userRoutes } from "../domain/user/routes.js";
-import { walletRoutes } from "../domain/wallet/routes.js";
-import { cardRoutes } from "../domain/cards/routes.js";
-import { ledgerRoutes } from "../domain/ledger/routes.js";
-import { onboardingRoutes } from "../domain/onboarding/routes.js";
-import { baasRouter, syncteraRouter } from "../domain/webhooks/routes.js";
+import { authRoutes } from "./domain/auth/routes.js";
+import { cardRoutes } from "./domain/cards/routes.js";
+import { ledgerRoutes } from "./domain/ledger/routes.js";
+import { onboardingRoutes } from "./domain/onboarding/routes.js";
+import { userRoutes } from "./domain/user/routes.js";
+import { walletRoutes } from "./domain/wallet/routes.js";
+import { baasRouter, syncteraRouter } from "./domain/webhooks/routes.js";
 
 /**
  * Register webhook routes (mounted before express.json to preserve raw bodies).
