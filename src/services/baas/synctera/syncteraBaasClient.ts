@@ -52,10 +52,10 @@ export class SyncteraBaasClient implements BaasClient {
           customer_id: params.externalCustomerId,
         },
       ],
-      // Enable core rails so downstream card issuance/funding works.
+      // Enable card usage; avoid ACH/external card rails for this partner to prevent rule violation.
       is_card_enabled: true,
-      is_ach_enabled: true,
-      is_external_card_enabled: true,
+      is_ach_enabled: false,
+      is_external_card_enabled: false,
     };
 
     const accountTemplateId =
@@ -64,8 +64,19 @@ export class SyncteraBaasClient implements BaasClient {
       payload.account_template_id = accountTemplateId;
     }
 
-    const res = await client.post("/accounts", payload);
-    const data = res.data ?? {};
+    let data: any;
+    try {
+      const res = await client.post("/accounts", payload);
+      data = res.data ?? {};
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const body = err?.response?.data;
+      Debugger.logError(`[SyncteraBaasClient] Account creation failed: status=${status}`);
+      if (body) {
+        Debugger.logJSON("[SyncteraBaasClient] Account creation response body", body);
+      }
+      throw err;
+    }
 
     Debugger.logInfo(
       `[SyncteraBaasClient] Created account ${data.id} for customer ${params.externalCustomerId}`
@@ -104,15 +115,28 @@ export class SyncteraBaasClient implements BaasClient {
     const client = getSyncteraClient();
     const payload: any = {
       card_product_id: cardProductId,
-      type: params.cardType ?? "VIRTUAL",
+      // Synctera schema expects: form (PHYSICAL|VIRTUAL) and type (DEBIT/CREDIT/PREPAID)
+      form: "VIRTUAL",
+      type: params.cardType ?? "PREPAID",
       customer_id: params.externalCustomerId,
       account_id: params.externalAccountId,
-      emboss_name: params.embossName,
+      emboss_name: params.embossName ? { line_1: params.embossName } : undefined,
       status: "ACTIVE",
     };
 
-    const res = await client.post("/cards", payload);
-    const data = res.data ?? {};
+    let data: any;
+    try {
+      const res = await client.post("/cards", payload);
+      data = res.data ?? {};
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const body = err?.response?.data;
+      Debugger.logError(`[SyncteraBaasClient] Card issuance failed: status=${status}`);
+      if (body) {
+        Debugger.logJSON("[SyncteraBaasClient] Card issuance response body", body);
+      }
+      throw err;
+    }
     const cardId = data.id ?? data.card_id ?? data.token;
     let finalStatus: string | undefined = data.card_status ?? data.status ?? "ACTIVE";
 

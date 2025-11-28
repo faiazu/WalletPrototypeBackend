@@ -20,7 +20,7 @@ export const config = {
     webhookSecret: process.env.SYNCTERA_WEBHOOK_SECRET,
     accountTemplateId: process.env.SYNCTERA_ACCOUNT_TEMPLATE_ID,
     cardProductId: process.env.SYNCTERA_CARD_PRODUCT_ID,
-    defaultAccountCurrency: process.env.SYNCTERA_ACCOUNT_CURRENCY || "USD",
+    defaultAccountCurrency: process.env.SYNCTERA_ACCOUNT_CURRENCY || "CAD",
   },
 };
 

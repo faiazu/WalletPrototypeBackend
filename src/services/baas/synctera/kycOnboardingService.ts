@@ -1,4 +1,5 @@
 import { prisma } from "../../../core/db.js";
+import { Debugger } from "../../../core/debugger.js";
 import { config } from "../../../core/config.js";
 import { BaasProviderName } from "../../../generated/prisma/enums.js";
 import { baasService } from "../../../core/dependencies.js";
@@ -98,9 +99,13 @@ export async function completeUserKyc(userId: string, input: KycInput) {
     try {
       await baasService.ensureAccountForUser(userId);
     } catch (err) {
-      console.error(
-        `[Synctera] Failed to ensure account after KYC for user ${userId}: ${err}`
+      const msg = (err as any)?.message || String(err);
+      Debugger.logError(
+        `[Synctera] Failed to ensure account after KYC for user ${userId}: ${msg}`
       );
+      if ((err as any)?.response?.data) {
+        Debugger.logJSON("[Synctera] Account creation response", (err as any).response.data);
+      }
     }
   }
 

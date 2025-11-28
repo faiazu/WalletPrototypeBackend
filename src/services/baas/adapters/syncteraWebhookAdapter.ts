@@ -45,14 +45,18 @@ function normalizeEvent(event: any): NormalizedBaasEvent {
   const type = event?.type ?? "UNKNOWN";
   const resourceType = typeof type === "string" ? type.split(".")[0] : "UNKNOWN";
 
-  // PERSON-related events: use resource_id/data fields (avoid deprecated event_resource)
+  // PERSON-related events: use resource_id/data/event_resource fields (avoid deprecated event_resource)
   if (resourceType === "PERSON") {
+    const resourceVerification =
+      event?.event_resource?.verification_status ??
+      event?.event_resource?.data?.verification_status;
     const personId =
       event?.resource_id ??
       event?.data?.person_id ??
       event?.person_id ??
       "unknown";
     const verificationStatus =
+      resourceVerification ??
       event?.data?.verification_status ??
       event?.verification_status ??
       "UNKNOWN";
@@ -110,7 +114,10 @@ function normalizeEvent(event: any): NormalizedBaasEvent {
     providerEventId: event?.id ?? event?.event_id ?? crypto.randomUUID(),
     personId: event?.resource_id ?? "unknown",
     verificationStatus:
-      event?.data?.verification_status ?? event?.verification_status ?? "UNKNOWN",
+      event?.event_resource?.verification_status ??
+      event?.data?.verification_status ??
+      event?.verification_status ??
+      "UNKNOWN",
     rawPayload: event,
   } as NormalizedKycVerificationEvent;
 }
