@@ -21,6 +21,9 @@
 - `POST /auth/login` (email-only; creates user if needed)
   - Body: `{ "email": "user@example.com" }`
   - Response: `{ "user": { "id": "...", "email": "..." }, "token": "..." }`
+- `POST /auth/login-christopher` (demo login; ensures KYC)
+  - No body required (uses configured demo user; default email `christopher.albertson@example.com`)
+  - Response: `{ "user": { "id": "...", "email": "...", "kycStatus": "ACCEPTED" }, "token": "...", "personId": "..." }`
 - `POST /auth/google` (optional; requires GOOGLE_CLIENT_ID)
   - Body: `{ "idToken": "<google_id_token>" }`
   - Response: `{ "user": { "id": "...", "email": "..." }, "token": "..." }`
@@ -32,6 +35,9 @@
 - `GET /user/me` — returns `{ "id": "...", "email": "..." }`
 
 ## Wallets
+- `GET /wallet` — list wallets the current user belongs to.
+- `POST /wallet/bootstrap` — ensure a default wallet (env `DEFAULT_WALLET_NAME` or "Groceries"), ensure membership, ensure a card for the current user, and return `{ wallet, card, balances }`.
+- Errors on wallet creation/bootstrap will return `UserNotFound` (re-login) if the JWT points to a missing user (e.g., after DB reset).
 - `POST /wallet/create`
   - Body: `{ "name": "My Wallet" }`
   - Response: `{ "wallet": { "id": "...", ... }, "ledger": ... }`

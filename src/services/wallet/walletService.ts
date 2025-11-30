@@ -9,6 +9,12 @@ export const walletService = {
     name: string;
     adminUserId: string;
   }) {
+    // Ensure admin user exists to avoid FK violations
+    const admin = await prisma.user.findUnique({ where: { id: adminUserId } });
+    if (!admin) {
+      throw new Error("AdminUserNotFound");
+    }
+
     return prisma.$transaction(async (tx) => {
       const wallet = await tx.wallet.create({
         data: {

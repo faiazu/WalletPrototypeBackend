@@ -1,14 +1,18 @@
 import { Router } from "express";
 
 import {
+  bootstrapDefaultWallet,
   createWallet,
   inviteMember,
   joinWallet,
+  listMyWallets,
   getWalletDetails,
 } from "./controller.js";
 
 const router = Router();
 
+router.get("/", listMyWallets);
+router.post("/bootstrap", bootstrapDefaultWallet);
 router.post("/create", createWallet);
 router.post("/:id/invite", inviteMember);
 router.post("/:id/join", joinWallet);
