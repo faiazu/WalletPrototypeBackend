@@ -3,14 +3,17 @@ import { LoginTicket, OAuth2Client } from "google-auth-library";
 import { prisma } from "../../core/db.js";
 import { signAccessToken } from "../../core/jwt.js";
 
-if (!process.env.GOOGLE_CLIENT_ID) {
-  throw new Error("Missing GOOGLE_CLIENT_ID in environment");
+function getGoogleClient(): { client: OAuth2Client; clientId: string } {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (!clientId) {
+    throw new Error("Missing GOOGLE_CLIENT_ID in environment");
+  }
+  return { client: new OAuth2Client(clientId), clientId };
 }
 
-const GOOGLE_CLIENT_ID: string = process.env.GOOGLE_CLIENT_ID;
-const googleClient: OAuth2Client = new OAuth2Client(GOOGLE_CLIENT_ID);
-
 export async function signInWithGoogle(idToken: string) {
+  const { client: googleClient, clientId: GOOGLE_CLIENT_ID } = getGoogleClient();
+
   // 1. Verify token with Google
   const ticket: LoginTicket = await googleClient.verifyIdToken({
     idToken,

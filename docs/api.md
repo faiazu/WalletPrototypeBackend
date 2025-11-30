@@ -18,7 +18,10 @@
    Embed URL/tokens in Synctera widgets; backend never exposes PAN/CVV directly.
 
 ## Auth
-- `POST /auth/google`
+- `POST /auth/login` (email-only; creates user if needed)
+  - Body: `{ "email": "user@example.com" }`
+  - Response: `{ "user": { "id": "...", "email": "..." }, "token": "..." }`
+- `POST /auth/google` (optional; requires GOOGLE_CLIENT_ID)
   - Body: `{ "idToken": "<google_id_token>" }`
   - Response: `{ "user": { "id": "...", "email": "..." }, "token": "..." }`
 - `POST /auth/debug-login` (dev only)

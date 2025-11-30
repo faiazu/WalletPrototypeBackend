@@ -43,6 +43,8 @@ Ad hoc/manual scripts organized by domain. Run with `npx tsx <path>` (set `.env`
 - `synctera/prospectToActive.ts` — move prospect to active.
 - `synctera/testOnboardingKyc.ts <TOKEN> [BASE_URL]` — KYC flow.
 - `synctera/testOnboardingKycApproved.ts <TOKEN> [BASE_URL]` — KYC flow (approved payload).
+- `synctera/bootstrapApprovedUser.ts <EMAIL> "<NAME>" [BASE_URL]` — create/login user via mock routes and submit approved KYC; prints token/personId.
+- `synctera/wipeSandbox.ts` — wipe Synctera sandbox (requires SYNCTERA_API_KEY).
 
 ## Notes
 - These scripts are manual aids, they are not automated tests.
