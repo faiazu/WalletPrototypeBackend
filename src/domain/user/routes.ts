@@ -21,6 +21,8 @@ router.get("/me", authMiddleware, async (req, res) => {
     select: {
       id: true,
       email: true,
+      name: true,
+      kycStatus: true,
     },
   });
 

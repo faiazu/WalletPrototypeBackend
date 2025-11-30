@@ -35,6 +35,11 @@ export async function ensureUserByEmail(email: string, name?: string): Promise<U
 
     // Synctera PERSON creation -> store in BaasCustomer
     await linkUserToSynctera(user);
+  } else if (name && !user.name) {
+    user = await prisma.user.update({
+      where: { email },
+      data: { name },
+    });
   }
 
   return user;

@@ -73,6 +73,7 @@ export interface BaasClient {
   createCustomer(params: CreateCustomerParams): Promise<CreateCustomerResult>;
   createCard(params: CreateCardParams): Promise<CreateCardResult>;
   createAccount?(params: CreateAccountParams): Promise<CreateAccountResult>;
+  updateCardStatus?(cardId: string, status: string): Promise<void>;
   // later: getProgramBalance, initiateTransfer, freezeCard, etc.
 }
 
@@ -114,5 +115,10 @@ export class MockBaasClient implements BaasClient {
       accountType: params.accountType ?? "CHECKING",
       currency: params.currency ?? "USD",
     };
+  }
+
+  async updateCardStatus(_cardId: string, _status: string): Promise<void> {
+    // no-op for mock
+    return;
   }
 }

@@ -7,6 +7,8 @@ import { BaasProviderName } from "../../generated/prisma/enums.js";
 import { authMiddleware } from "../../core/authMiddleware.js";
 import { syncteraWidgetService } from "../../services/baas/synctera/syncteraWidgetService.js";
 import { issueCardParamsSchema, widgetQuerySchema } from "./validator.js";
+import { isMember } from "../../services/wallet/memberService.js";
+import { ledgerService } from "../../services/ledger/ledgerService.js";
 
 /**
  * Issue a card for the authenticated user and link to wallet.
@@ -48,6 +50,7 @@ async function resolveCardContext(cardId: string, userId: string): Promise<{
   walletId: string;
   accountId: string;
   customerId: string;
+  cardHolderName?: string | null;
 }> {
   const card = await prisma.baasCard.findFirst({
     where: {
@@ -103,6 +106,7 @@ async function resolveCardContext(cardId: string, userId: string): Promise<{
     walletId: card.walletId,
     accountId: account.externalAccountId,
     customerId: customer.externalCustomerId,
+    cardHolderName: card.user?.name ?? null,
   };
 }
 
@@ -117,6 +121,17 @@ export const getWidgetUrl = [
       const cardId = req.params.cardId;
       if (!cardId) {
         return res.status(400).json({ error: "CardIdRequired" });
+      }
+
+      // Wallet membership check
+      const card = await prisma.baasCard.findFirst({
+        where: { externalCardId: cardId },
+      });
+      if (!card || !card.walletId) {
+        return res.status(404).json({ error: "CardNotFound" });
+      }
+      if (!(await isMember(card.walletId, userId))) {
+        return res.status(403).json({ error: "UserNotMemberOfWallet" });
       }
 
       const { widgetType } = widgetQuerySchema.parse({
@@ -165,6 +180,16 @@ export const postClientToken = [
         return res.status(400).json({ error: "CardIdRequired" });
       }
 
+      const card = await prisma.baasCard.findFirst({
+        where: { externalCardId: cardId },
+      });
+      if (!card || !card.walletId) {
+        return res.status(404).json({ error: "CardNotFound" });
+      }
+      if (!(await isMember(card.walletId, userId))) {
+        return res.status(403).json({ error: "UserNotMemberOfWallet" });
+      }
+
       const ctx = await resolveCardContext(cardId, userId);
 
       const result = await syncteraWidgetService.getClientAccessToken({
@@ -204,6 +229,16 @@ export const postSingleUseToken = [
         return res.status(400).json({ error: "CardIdRequired" });
       }
 
+      const card = await prisma.baasCard.findFirst({
+        where: { externalCardId: cardId },
+      });
+      if (!card || !card.walletId) {
+        return res.status(404).json({ error: "CardNotFound" });
+      }
+      if (!(await isMember(card.walletId, userId))) {
+        return res.status(403).json({ error: "UserNotMemberOfWallet" });
+      }
+
       const ctx = await resolveCardContext(cardId, userId);
 
       const result = await syncteraWidgetService.getSingleUseToken({
@@ -227,6 +262,95 @@ export const postSingleUseToken = [
         return res.status(400).json({ error: err.message });
       }
       return res.status(500).json({ error: err?.message ?? "Failed to get single-use token" });
+    }
+  },
+];
+
+/**
+ * GET card details (status, holder, wallet, balances).
+ */
+export const getCardDetails = [
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const cardId = req.params.cardId;
+      if (!cardId) {
+        return res.status(400).json({ error: "CardIdRequired" });
+      }
+
+      const card = await prisma.baasCard.findFirst({
+        where: { externalCardId: cardId },
+        include: {
+          user: { select: { id: true, email: true, name: true } },
+        },
+      });
+      if (!card || !card.walletId) {
+        return res.status(404).json({ error: "CardNotFound" });
+      }
+      if (!(await isMember(card.walletId, userId))) {
+        return res.status(403).json({ error: "UserNotMemberOfWallet" });
+      }
+
+      const balances = await ledgerService.getWalletDisplayBalances(card.walletId);
+
+      return res.status(200).json({
+        card: {
+          id: card.id,
+          externalCardId: card.externalCardId,
+          walletId: card.walletId,
+          status: card.status,
+          last4: card.last4,
+          providerName: card.providerName,
+          user: card.user,
+          createdAt: card.createdAt,
+          updatedAt: card.updatedAt,
+          // expiry not stored; null for now
+          expiryMonth: null,
+          expiryYear: null,
+        },
+        balances,
+      });
+    } catch (err: any) {
+      return res.status(400).json({ error: err?.message || "Failed to fetch card" });
+    }
+  },
+];
+
+/**
+ * PATCH card status (lock/unlock/deactivate) for wallet members.
+ */
+export const updateCardStatus = [
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const cardId = req.params.cardId;
+      if (!cardId) {
+        return res.status(400).json({ error: "CardIdRequired" });
+      }
+
+      const parsed = (req.body && req.body.status) ? req.body.status : undefined;
+      const status = typeof parsed === "string" ? parsed.toUpperCase() : undefined;
+      if (!status || !["ACTIVE", "LOCKED", "CANCELED", "SUSPENDED"].includes(status)) {
+        return res.status(400).json({ error: "InvalidStatus", message: "Status must be one of ACTIVE, LOCKED, CANCELED, SUSPENDED" });
+      }
+
+      const card = await prisma.baasCard.findFirst({
+        where: { externalCardId: cardId },
+      });
+      if (!card || !card.walletId) {
+        return res.status(404).json({ error: "CardNotFound" });
+      }
+      if (!(await isMember(card.walletId, userId))) {
+        return res.status(403).json({ error: "UserNotMemberOfWallet" });
+      }
+
+      await baasService.updateCardStatus(cardId, status);
+
+      return res.status(200).json({ status });
+    } catch (err: any) {
+      return res.status(400).json({ error: err?.message || "Failed to update card status" });
     }
   },
 ];

@@ -32,7 +32,10 @@ export const debugLogin = async (req: Request, res: Response) => {
   if (!user) return res.status(404).json({ error: "User not found" });
 
   const token = signAccessToken(user.id);
-  return res.json({ user: { id: user.id, email: user.email }, token });
+  return res.json({
+    user: { id: user.id, email: user.email, name: user.name || null },
+    token,
+  });
 };
 
 // Email-only login: ensure user exists, return token
@@ -46,7 +49,10 @@ export const emailLogin = async (req: Request, res: Response) => {
     const { email } = parsed.data;
     const user = await ensureUserByEmail(email);
     const token = signAccessToken(user.id);
-    return res.json({ user: { id: user.id, email: user.email }, token });
+    return res.json({
+      user: { id: user.id, email: user.email, name: user.name || null },
+      token,
+    });
   } catch (err: any) {
     return res.status(400).json({ error: err?.message || "Login failed" });
   }
@@ -96,6 +102,7 @@ export const loginChristopher = async (_req: Request, res: Response) => {
       user: {
         id: currentUser.id,
         email: currentUser.email,
+        name: currentUser.name || DEMO_NAME,
         kycStatus,
       },
       token,

@@ -174,4 +174,11 @@ export class SyncteraBaasClient implements BaasClient {
       status: finalStatus ?? "ACTIVE",
     };
   }
+
+  async updateCardStatus(cardId: string, status: string): Promise<void> {
+    const client = getSyncteraClient();
+    const payload: any = { card_status: status };
+    await client.patch(`/cards/${cardId}`, payload);
+    Debugger.logInfo(`[SyncteraBaasClient] Updated card ${cardId} status -> ${status}`);
+  }
 }

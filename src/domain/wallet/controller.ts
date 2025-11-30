@@ -205,10 +205,17 @@ export const bootstrapDefaultWallet = [
       // 5) Fetch wallet details + reconciliation for balances
       const wallet = await walletService.getWalletDetails(walletId);
       const reconciliation = await ledgerService.getWalletDisplayBalances(walletId);
+      const cards = await prisma.baasCard.findMany({
+        where: { walletId },
+        orderBy: { createdAt: "asc" },
+        include: {
+          user: { select: { id: true, email: true, name: true } },
+        },
+      });
 
       return res.status(200).json({
         wallet,
-        card,
+        cards,
         balances: reconciliation,
       });
     } catch (err: any) {

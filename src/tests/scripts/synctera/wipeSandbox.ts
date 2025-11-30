@@ -3,6 +3,9 @@
 // Requires: SYNCTERA_API_KEY in env; optional SYNCTERA_BASE_URL (defaults to sandbox).
 
 import axios from "axios";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const apiKey = process.env.SYNCTERA_API_KEY;
 const baseUrl = process.env.SYNCTERA_BASE_URL || "https://api-sandbox.synctera.com/v0";

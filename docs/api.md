@@ -20,23 +20,23 @@
 ## Auth
 - `POST /auth/login` (email-only; creates user if needed)
   - Body: `{ "email": "user@example.com" }`
-  - Response: `{ "user": { "id": "...", "email": "..." }, "token": "..." }`
+  - Response: `{ "user": { "id": "...", "email": "...", "name": "..." }, "token": "..." }`
 - `POST /auth/login-christopher` (demo login; ensures KYC)
   - No body required (uses configured demo user; default email `christopher.albertson@example.com`)
-  - Response: `{ "user": { "id": "...", "email": "...", "kycStatus": "ACCEPTED" }, "token": "...", "personId": "..." }`
+  - Response: `{ "user": { "id": "...", "email": "...", "name": "...", "kycStatus": "ACCEPTED" }, "token": "...", "personId": "..." }`
 - `POST /auth/google` (optional; requires GOOGLE_CLIENT_ID)
   - Body: `{ "idToken": "<google_id_token>" }`
-  - Response: `{ "user": { "id": "...", "email": "..." }, "token": "..." }`
+  - Response: `{ "user": { "id": "...", "email": "...", "name": "..." }, "token": "..." }`
 - `POST /auth/debug-login` (dev only)
   - Body: `{ "email": "user@example.com" }`
   - Response: `{ "user": { "id": "...", "email": "..." }, "token": "..." }`
 
 ## User
-- `GET /user/me` — returns `{ "id": "...", "email": "..." }`
+- `GET /user/me` — returns `{ "id": "...", "email": "...", "name": "...", "kycStatus"?: "..." }`
 
 ## Wallets
 - `GET /wallet` — list wallets the current user belongs to.
-- `POST /wallet/bootstrap` — ensure a default wallet (env `DEFAULT_WALLET_NAME` or "Groceries"), ensure membership, ensure a card for the current user, and return `{ wallet, card, balances }`.
+- `POST /wallet/bootstrap` — ensure a default wallet (env `DEFAULT_WALLET_NAME` or "Groceries"), ensure membership, ensure a card for the current user, and return `{ wallet, cards, balances }` (cards include creator name/email).
 - Errors on wallet creation/bootstrap will return `UserNotFound` (re-login) if the JWT points to a missing user (e.g., after DB reset).
 - `POST /wallet/create`
   - Body: `{ "name": "My Wallet" }`
@@ -47,6 +47,9 @@
   - Join as member
 - `GET /wallet/:id`
   - Returns wallet details (members, ledger accounts) if admin/member
+- `GET /wallets/:walletId/cards`
+  - Requires wallet membership.
+  - Response: `{ "cards": [ { "id": "...", "externalCardId": "...", "last4": "...", "user": { "id": "...", "email": "...", "name": "..." } } ] }`
 
 ## Onboarding (Synctera KYC)
 - `POST /onboarding/kyc`
@@ -78,6 +81,15 @@
 - Issue card: `POST /wallets/:walletId/cards`
   - Requires wallet membership.
   - Response: `{ "provider": "SYNCTERA", "externalCardId": "...", "last4": "1234", "status": "ACTIVE" }`
+- List cards in wallet: `GET /wallets/:walletId/cards`
+  - Requires wallet membership.
+  - Response: `{ "cards": [ { "id": "...", "externalCardId": "...", "last4": "...", "status": "...", "user": { "id": "...", "email": "...", "name": "..." } } ] }`
+- Get card details: `GET /cards/:cardId`
+  - Requires wallet membership.
+  - Response: `{ "card": { "id": "...", "externalCardId": "...", "walletId": "...", "status": "...", "last4": "...", "providerName": "...", "user": { "id": "...", "email": "...", "name": "..." }, "expiryMonth": null, "expiryYear": null, ... }, "balances": { "poolDisplay": ..., "memberEquity": [...] } }`
+- Update card status: `PATCH /cards/:cardId/status` with body `{ "status": "ACTIVE" | "LOCKED" | "CANCELED" | "SUSPENDED" }`
+  - Requires wallet membership.
+  - Response: `{ "status": "..." }`
 - Widget URL: `GET /cards/:cardId/widget-url?widgetType=activate_card|set_pin`
   - Response: `{ "url": "https://..." }`
 - Client token: `POST /cards/:cardId/client-token`

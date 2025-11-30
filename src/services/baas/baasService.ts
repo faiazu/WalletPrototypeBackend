@@ -260,4 +260,18 @@ export class BaasService {
       ...(cardResult.last4 && { last4: cardResult.last4 }),
     };
   }
+
+  /**
+   * Update card status at the provider and persist locally.
+   */
+  async updateCardStatus(externalCardId: string, status: string): Promise<void> {
+    if (typeof (this.client as any)?.updateCardStatus === "function") {
+      await (this.client as any).updateCardStatus(externalCardId, status);
+    }
+
+    await this.prisma.baasCard.updateMany({
+      where: { externalCardId, providerName: this.provider },
+      data: { status, updatedAt: new Date() },
+    });
+  }
 }

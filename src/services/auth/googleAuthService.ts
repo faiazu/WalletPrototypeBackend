@@ -31,14 +31,19 @@ export async function signInWithGoogle(idToken: string) {
 
   const googleSub: string = payload.sub;
   const email: string = payload.email;
+  const fullName: string | undefined = payload.name || undefined;
 
   // 2. Upsert user in DB
   const user = await prisma.user.upsert({
     where: { googleId: googleSub },
-    update: { email: email },
+    update: {
+      email: email,
+      ...(fullName ? { name: fullName } : {}),
+    },
     create: {
       googleId: googleSub,
       email: email,
+      name: fullName ?? null,
     },
   });
 
@@ -49,6 +54,7 @@ export async function signInWithGoogle(idToken: string) {
     user: {
       id: user.id,
       email: user.email,
+      name: user.name || fullName || null,
     },
     token,
   };
