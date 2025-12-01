@@ -39,6 +39,10 @@
     "user": { "id": "...", "email": "...", "name": "...", "kycStatus": "ACCEPTED" },
     "hasWallets": true,
     "requirements": { "kycRequired": false },
+    "metadata": {
+      "defaultWalletName": "Household",
+      "isWalletAdmin": true
+    },
     "wallets": [
       {
         "id": "...",
@@ -49,6 +53,16 @@
         "cardCount": 2,
         "hasCardForCurrentUser": true,
         "joinedAt": "...",
+        "createdAt": "..."
+      }
+    ],
+    "cardsForCurrentUser": [
+      {
+        "walletId": "...",
+        "externalCardId": "card_123",
+        "last4": "1234",
+        "status": "ACTIVE",
+        "providerName": "SYNCTERA",
         "createdAt": "..."
       }
     ]
@@ -67,7 +81,7 @@
 - `POST /wallet/:id/join`
   - Join as member
 - `GET /wallet/:id`
-  - Returns wallet details (members, ledger accounts) if admin/member
+  - Returns wallet details (members, ledger accounts) and `balances` snapshot if admin/member
 - `GET /wallets/:walletId/cards`
   - Requires wallet membership.
   - Response: `{ "cards": [ { "id": "...", "externalCardId": "...", "last4": "...", "user": { "id": "...", "email": "...", "name": "..." } } ] }`
@@ -100,17 +114,21 @@
 
 ## Cards (Synctera)
 - Issue card: `POST /wallets/:walletId/cards`
+  - Optional body: `{ "nickname": "Groceries card" }`
   - Requires wallet membership.
-  - Response: `{ "provider": "SYNCTERA", "externalCardId": "...", "last4": "1234", "status": "ACTIVE" }`
+  - Response: `{ "provider": "SYNCTERA", "externalCardId": "...", "last4": "1234", "status": "ACTIVE", "nickname": "Groceries card" }`
 - List cards in wallet: `GET /wallets/:walletId/cards`
   - Requires wallet membership.
-  - Response: `{ "cards": [ { "id": "...", "externalCardId": "...", "last4": "...", "status": "...", "user": { "id": "...", "email": "...", "name": "..." } } ] }`
+  - Response: `{ "cards": [ { "id": "...", "externalCardId": "...", "last4": "...", "status": "...", "nickname": "Groceries card", "user": { "id": "...", "email": "...", "name": "..." } } ] }`
 - Get card details: `GET /cards/:cardId`
   - Requires wallet membership.
-  - Response: `{ "card": { "id": "...", "externalCardId": "...", "walletId": "...", "status": "...", "last4": "...", "providerName": "...", "user": { "id": "...", "email": "...", "name": "..." }, "expiryMonth": null, "expiryYear": null, ... }, "balances": { "poolDisplay": ..., "memberEquity": [...] } }`
+  - Response: `{ "card": { "id": "...", "externalCardId": "...", "walletId": "...", "status": "...", "last4": "...", "nickname": "Groceries card", "providerName": "...", "user": { "id": "...", "email": "...", "name": "..." }, "expiryMonth": null, "expiryYear": null, ... }, "balances": { "poolDisplay": ..., "memberEquity": [...] } }`
 - Update card status: `PATCH /cards/:cardId/status` with body `{ "status": "ACTIVE" | "LOCKED" | "CANCELED" | "SUSPENDED" }`
   - Requires wallet membership.
   - Response: `{ "status": "..." }`
+- Update card nickname: `PATCH /cards/:cardId/nickname` with body `{ "nickname": "Travel Spending" }`
+  - Requires wallet membership.
+  - Response: `{ "card": { "externalCardId": "...", "nickname": "Travel Spending", "status": "...", "last4": "1234" } }`
 - Widget URL: `GET /cards/:cardId/widget-url?widgetType=activate_card|set_pin`
   - Response: `{ "url": "https://..." }`
 - Client token: `POST /cards/:cardId/client-token`

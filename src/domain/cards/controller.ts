@@ -6,7 +6,12 @@ import { baasService } from "../../core/dependencies.js";
 import { BaasProviderName } from "../../generated/prisma/enums.js";
 import { authMiddleware } from "../../core/authMiddleware.js";
 import { syncteraWidgetService } from "../../services/baas/synctera/syncteraWidgetService.js";
-import { issueCardParamsSchema, widgetQuerySchema } from "./validator.js";
+import {
+  issueCardBodySchema,
+  issueCardParamsSchema,
+  updateCardNicknameSchema,
+  widgetQuerySchema,
+} from "./validator.js";
 import { isMember } from "../../services/wallet/memberService.js";
 import { ledgerService } from "../../services/ledger/ledgerService.js";
 
@@ -23,7 +28,8 @@ export const issueCard = [
       }
 
       const { walletId } = issueCardParamsSchema.parse({ walletId: req.params.walletId });
-      const card = await baasService.createCardForUser(userId, walletId);
+      const { nickname } = issueCardBodySchema.parse(req.body ?? {});
+      const card = await baasService.createCardForUser(userId, walletId, { nickname });
 
       return res.status(201).json(card);
     } catch (err: any) {
@@ -301,14 +307,15 @@ export const getCardDetails = [
           walletId: card.walletId,
           status: card.status,
           last4: card.last4,
-          providerName: card.providerName,
-          user: card.user,
-          createdAt: card.createdAt,
-          updatedAt: card.updatedAt,
-          // expiry not stored; null for now
-          expiryMonth: null,
-          expiryYear: null,
-        },
+        providerName: card.providerName,
+        user: card.user,
+        createdAt: card.createdAt,
+        updatedAt: card.updatedAt,
+        nickname: card.nickname,
+        // expiry not stored; null for now
+        expiryMonth: null,
+        expiryYear: null,
+      },
         balances,
       });
     } catch (err: any) {
@@ -351,6 +358,61 @@ export const updateCardStatus = [
       return res.status(200).json({ status });
     } catch (err: any) {
       return res.status(400).json({ error: err?.message || "Failed to update card status" });
+    }
+  },
+];
+
+/**
+ * PATCH card nickname for wallet members.
+ */
+export const updateCardNickname = [
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const cardId = req.params.cardId;
+      if (!cardId) {
+        return res.status(400).json({ error: "CardIdRequired" });
+      }
+
+      const { nickname } = updateCardNicknameSchema.parse(req.body ?? {});
+
+      const card = await prisma.baasCard.findFirst({
+        where: { externalCardId: cardId },
+      });
+
+      if (!card || !card.walletId) {
+        return res.status(404).json({ error: "CardNotFound" });
+      }
+
+      if (!(await isMember(card.walletId, userId))) {
+        return res.status(403).json({ error: "UserNotMemberOfWallet" });
+      }
+
+      const updated = await prisma.baasCard.update({
+        where: { id: card.id },
+        data: { nickname },
+        select: {
+          externalCardId: true,
+          nickname: true,
+          status: true,
+          last4: true,
+        },
+      });
+
+      return res.status(200).json({
+        card: {
+          externalCardId: updated.externalCardId,
+          nickname: updated.nickname,
+          status: updated.status,
+          last4: updated.last4,
+        },
+      });
+    } catch (err: any) {
+      if (err?.name === "ZodError") {
+        return res.status(400).json({ error: "InvalidNickname", details: err.errors });
+      }
+      return res.status(400).json({ error: err?.message || "Failed to update card nickname" });
     }
   },
 ];

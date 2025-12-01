@@ -182,10 +182,16 @@ export class BaasService {
    *  - card.userId  = the payer
    *  - card.walletId = which shared wallet balance to hit
    */
-  async createCardForUser(userId: string, walletId: string): Promise<{
+  async createCardForUser(
+    userId: string,
+    walletId: string,
+    options?: { nickname?: string }
+  ): Promise<{
     provider: BaasProviderName;
     externalCardId: string;
     last4?: string;
+    status?: string;
+    nickname?: string | null;
   }> {
     // 1) Ensure user exists + belongs to this wallet
     const walletMember = await this.prisma.walletMember.findFirst({
@@ -237,6 +243,8 @@ export class BaasService {
         provider: existingCard.providerName,
         externalCardId: existingCard.externalCardId,
         ...(existingCard.last4 && { last4: existingCard.last4 }),
+        ...(existingCard.status && { status: existingCard.status }),
+        nickname: existingCard.nickname ?? null,
       };
     }
 
@@ -251,6 +259,7 @@ export class BaasService {
         externalCardId: cardResult.externalCardId,
         last4: cardResult.last4 ?? null,
         status: cardResult.status ?? "ACTIVE",
+        nickname: options?.nickname ?? null,
       },
     });
 
@@ -258,6 +267,8 @@ export class BaasService {
       provider: cardResult.provider,
       externalCardId: cardResult.externalCardId,
       ...(cardResult.last4 && { last4: cardResult.last4 }),
+      status: cardResult.status ?? "ACTIVE",
+      nickname: options?.nickname ?? null,
     };
   }
 

@@ -6,6 +6,7 @@ import {
   issueCard,
   postClientToken,
   postSingleUseToken,
+  updateCardNickname,
   updateCardStatus,
 } from "./controller.js";
 import { walletCardsRoutes } from "./routes.wallet.js";
@@ -20,5 +21,6 @@ router.post("/cards/:cardId/single-use-token", postSingleUseToken);
 router.use("/wallets/:walletId/cards", walletCardsRoutes);
 router.get("/cards/:cardId", authMiddleware, getCardDetails);
 router.patch("/cards/:cardId/status", authMiddleware, updateCardStatus);
+router.patch("/cards/:cardId/nickname", authMiddleware, updateCardNickname);
 
 export { router as cardRoutes };

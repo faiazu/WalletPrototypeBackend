@@ -6,6 +6,7 @@ import { addMember, isMember } from "../../services/wallet/memberService.js";
 import { requireUserByEmail } from "../../services/user/userService.js";
 import { walletService } from "../../services/wallet/walletService.js";
 import { createWalletSchema, inviteSchema } from "./validator.js";
+import { ledgerService } from "../../services/ledger/ledgerService.js";
 
 /**
  * Controller for creating a wallet.
@@ -141,7 +142,9 @@ export const getWalletDetails = [
       const member = await isMember(walletId, userId);
       if (!admin && !member) return res.status(403).json({ error: "Access denied" });
 
-      return res.json({ wallet });
+      const balances = await ledgerService.getWalletDisplayBalances(walletId);
+
+      return res.json({ wallet, balances });
     } catch (err: any) {
       return res.status(400).json({ error: err.message || "Failed to fetch wallet" });
     }

@@ -157,6 +157,7 @@ model BaasCard {
   externalCardId String           @unique
   last4          String?
   status         String           @default("ACTIVE")
+  nickname       String?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 

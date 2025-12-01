@@ -96,7 +96,15 @@ router.get("/overview", authMiddleware, async (req, res) => {
             walletId: { in: walletIds },
             userId,
           },
-          select: { walletId: true },
+          select: {
+            walletId: true,
+            externalCardId: true,
+            last4: true,
+            status: true,
+            providerName: true,
+            nickname: true,
+            createdAt: true,
+          },
         })
       : Promise.resolve([]),
   ]);
@@ -134,7 +142,20 @@ router.get("/overview", authMiddleware, async (req, res) => {
     requirements: {
       kycRequired: (user.kycStatus ?? "UNKNOWN") !== "ACCEPTED",
     },
+    metadata: {
+      defaultWalletName: process.env.DEFAULT_WALLET_NAME || "Household",
+      isWalletAdmin: wallets.some((wallet) => wallet.isAdmin),
+    },
     wallets,
+    cardsForCurrentUser: myWalletCards.map((card) => ({
+      walletId: card.walletId,
+      externalCardId: card.externalCardId,
+      last4: card.last4,
+      status: card.status,
+      providerName: card.providerName,
+      nickname: card.nickname,
+      createdAt: card.createdAt,
+    })),
   });
 });
 
