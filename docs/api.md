@@ -33,12 +33,33 @@
 
 ## User
 - `GET /user/me` — returns `{ "id": "...", "email": "...", "name": "...", "kycStatus"?: "..." }`
+- `GET /user/overview` — convenience response for onboarding/dashboard:
+  ```jsonc
+  {
+    "user": { "id": "...", "email": "...", "name": "...", "kycStatus": "ACCEPTED" },
+    "hasWallets": true,
+    "requirements": { "kycRequired": false },
+    "wallets": [
+      {
+        "id": "...",
+        "name": "Shared Groceries",
+        "role": "admin",
+        "isAdmin": true,
+        "memberCount": 3,
+        "cardCount": 2,
+        "hasCardForCurrentUser": true,
+        "joinedAt": "...",
+        "createdAt": "..."
+      }
+    ]
+  }
+  ```
+  Use `hasWallets` + `wallets.length` to decide whether to show the onboarding screen shown in the mockup.
 
 ## Wallets
-- `GET /wallet` — list wallets the current user belongs to.
-- `POST /wallet/bootstrap` — ensure a default wallet (env `DEFAULT_WALLET_NAME` or "Groceries"), ensure membership, ensure a card for the current user, and return `{ wallet, cards, balances }` (cards include creator name/email).
-- Errors on wallet creation/bootstrap will return `UserNotFound` (re-login) if the JWT points to a missing user (e.g., after DB reset).
+- `GET /wallet` — list wallets the current user belongs to; frontend can show the onboarding screen when this returns an empty array.
 - `POST /wallet/create`
+  - Requires the user’s `kycStatus` to be `ACCEPTED`; otherwise the route returns `403 KycRequired`.
   - Body: `{ "name": "My Wallet" }`
   - Response: `{ "wallet": { "id": "...", ... }, "ledger": ... }`
 - `POST /wallet/:id/invite`

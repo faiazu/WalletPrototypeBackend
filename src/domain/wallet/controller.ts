@@ -6,8 +6,6 @@ import { addMember, isMember } from "../../services/wallet/memberService.js";
 import { requireUserByEmail } from "../../services/user/userService.js";
 import { walletService } from "../../services/wallet/walletService.js";
 import { createWalletSchema, inviteSchema } from "./validator.js";
-import { ledgerService } from "../../services/ledger/ledgerService.js";
-import { baasService } from "../../core/dependencies.js";
 
 /**
  * Controller for creating a wallet.
@@ -20,6 +18,11 @@ export const createWallet = [
       const user = await prisma.user.findUnique({ where: { id: userId } });
       if (!user) {
         return res.status(404).json({ error: "UserNotFound", message: "User record missing; please re-login." });
+      }
+      if ((user.kycStatus ?? "UNKNOWN") !== "ACCEPTED") {
+        return res
+          .status(403)
+          .json({ error: "KycRequired", message: "KYC approval is required before creating a wallet." });
       }
       const { name } = createWalletSchema.parse(req.body);
 
@@ -141,85 +144,6 @@ export const getWalletDetails = [
       return res.json({ wallet });
     } catch (err: any) {
       return res.status(400).json({ error: err.message || "Failed to fetch wallet" });
-    }
-  },
-];
-
-/**
- * Bootstrap a default wallet + card for the current user.
- */
-export const bootstrapDefaultWallet = [
-  authMiddleware,
-  async (req: Request, res: Response) => {
-    try {
-      const userId = req.userId!;
-      const user = await prisma.user.findUnique({ where: { id: userId } });
-      if (!user) {
-        return res.status(404).json({ error: "UserNotFound", message: "User record missing; please re-login." });
-      }
-      const defaultName = process.env.DEFAULT_WALLET_NAME || "Groceries";
-
-      // 1) Find existing wallet membership
-      let walletMember = await prisma.walletMember.findFirst({
-        where: { userId },
-        include: { wallet: true },
-        orderBy: { joinedAt: "asc" },
-      });
-
-      // 2) Create wallet if none
-      if (!walletMember) {
-        const created = await walletService.createWallet({
-          name: defaultName,
-          adminUserId: userId,
-        });
-        walletMember = await prisma.walletMember.findFirst({
-          where: { userId, walletId: created.wallet.id },
-          include: { wallet: true },
-        });
-      }
-
-      if (!walletMember || !walletMember.wallet) {
-        return res.status(500).json({ error: "Failed to ensure wallet" });
-      }
-
-      const walletId = walletMember.wallet.id;
-
-      // 3) Ensure user is member (should be already)
-      if (!(await isMember(walletId, userId))) {
-        await addMember(walletId, userId, "member");
-      }
-
-      // 4) Ensure a card exists for this user + wallet
-      let card = await prisma.baasCard.findFirst({
-        where: { walletId, userId },
-        orderBy: { createdAt: "asc" },
-      });
-
-      if (!card) {
-        const issued = await baasService.createCardForUser(userId, walletId);
-        card = await prisma.baasCard.findFirst({
-          where: { walletId, userId, externalCardId: issued.externalCardId },
-        });
-      }
-
-      // 5) Fetch wallet details + reconciliation for balances
-      const wallet = await walletService.getWalletDetails(walletId);
-      const reconciliation = await ledgerService.getWalletDisplayBalances(walletId);
-      const cards = await prisma.baasCard.findMany({
-        where: { walletId },
-        orderBy: { createdAt: "asc" },
-        include: {
-          user: { select: { id: true, email: true, name: true } },
-        },
-      });
-
-      return res.status(200).json({
-        wallet,
-        cards,
-        balances: reconciliation,
-      });
-    } catch (err: any) {
-      return res.status(400).json({ error: err.message || "Failed to bootstrap wallet" });
     }
   },
 ];
