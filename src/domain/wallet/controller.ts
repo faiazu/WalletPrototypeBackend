@@ -93,7 +93,17 @@ export const inviteMember = [
 
       // Fetch wallet details and balances to return enriched context
       const wallet = await walletService.getWalletDetails(walletId);
-      const balances = await ledgerService.getWalletDisplayBalances(walletId);
+      const rawBalances = await ledgerService.getWalletDisplayBalances(walletId);
+
+      // Convert cents to dollars for iOS client
+      const centsToDollars = (cents: number): number => cents / 100;
+      const balances = {
+        poolDisplay: centsToDollars(rawBalances.poolDisplay),
+        memberEquity: rawBalances.memberEquity.map(m => ({
+          userId: m.userId,
+          balance: centsToDollars(m.balance)
+        }))
+      };
 
       return res.status(201).json({ wallet, balances, member });
     } catch (err: any) {
@@ -126,7 +136,17 @@ export const joinWallet = [
 
       // Fetch wallet details and balances to return enriched context
       const wallet = await walletService.getWalletDetails(walletId);
-      const balances = await ledgerService.getWalletDisplayBalances(walletId);
+      const rawBalances = await ledgerService.getWalletDisplayBalances(walletId);
+
+      // Convert cents to dollars for iOS client
+      const centsToDollars = (cents: number): number => cents / 100;
+      const balances = {
+        poolDisplay: centsToDollars(rawBalances.poolDisplay),
+        memberEquity: rawBalances.memberEquity.map(m => ({
+          userId: m.userId,
+          balance: centsToDollars(m.balance)
+        }))
+      };
 
       return res.status(201).json({ wallet, balances, member });
     } catch (err: any) {
@@ -152,7 +172,17 @@ export const getWalletDetails = [
       const member = await isMember(walletId, userId);
       if (!admin && !member) return res.status(403).json({ error: "Access denied" });
 
-      const balances = await ledgerService.getWalletDisplayBalances(walletId);
+      const rawBalances = await ledgerService.getWalletDisplayBalances(walletId);
+
+      // Convert cents to dollars for iOS client
+      const centsToDollars = (cents: number): number => cents / 100;
+      const balances = {
+        poolDisplay: centsToDollars(rawBalances.poolDisplay),
+        memberEquity: rawBalances.memberEquity.map(m => ({
+          userId: m.userId,
+          balance: centsToDollars(m.balance)
+        }))
+      };
 
       return res.json({ wallet, balances });
     } catch (err: any) {
