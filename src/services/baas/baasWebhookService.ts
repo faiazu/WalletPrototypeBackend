@@ -13,12 +13,15 @@ import type {
   NormalizedCardAuthReversalEvent,
   NormalizedCardClearingEvent,
   NormalizedWalletFundingEvent,
+  NormalizedPayoutStatusEvent,
   NormalizedKycVerificationEvent,
   NormalizedAccountStatusEvent,
   NormalizedCardStatusEvent,
 } from "./baasTypes.js";
 
 import { fundingRouteService } from "./fundingRouteService.js";
+import { withdrawalService } from "../wallet/withdrawalService.js";
+import { ledgerService } from "../ledger/ledgerService.js";
 
 import type { CardProgramService, CardAuthDecision } from "./cardProgramService.js";
 
@@ -165,6 +168,12 @@ export class BaasWebhookService {
 
     if (event.type === "WALLET_FUNDING") {
       await this.handleWalletFunding(event as NormalizedWalletFundingEvent);
+      await this.markEventProcessed(providerName, event.providerEventId);
+      return;
+    }
+
+    if (event.type === "PAYOUT_STATUS") {
+      await this.handlePayoutStatus(event as NormalizedPayoutStatusEvent);
       await this.markEventProcessed(providerName, event.providerEventId);
       return;
     }
@@ -445,6 +454,91 @@ export class BaasWebhookService {
       console.warn(
         `[BaasWebhookService] Card status event with no mapping: providerCardId=${event.providerCardId}`
       );
+    }
+  }
+
+  /**
+   * Handle payout/withdrawal status updates from provider
+   * 
+   * Completes or reverses pending withdrawals based on provider confirmation
+   */
+  private async handlePayoutStatus(event: NormalizedPayoutStatusEvent): Promise<void> {
+    // Find withdrawal transfer by provider ID
+    const transfer = await withdrawalService.findTransferByProviderId(
+      event.provider,
+      event.providerTransferId
+    );
+
+    if (!transfer) {
+      console.warn(
+        `[BaasWebhookService] PAYOUT_STATUS_NOT_FOUND: providerTransferId=${event.providerTransferId}, ` +
+          `provider=${event.provider}, status=${event.status}`
+      );
+      return;
+    }
+
+    const request = transfer.withdrawalRequest;
+
+    try {
+      if (event.status === "COMPLETED") {
+        // Finalize withdrawal: move from pending to completed
+        await withdrawalService.completeWithdrawalTransfer(transfer.id);
+
+        // Finalize in ledger: move from pending_withdrawal to wallet_pool
+        const ledgerTransactionId = `withdrawal_finalize_${request.id}`;
+        await ledgerService.finalizeWithdrawal({
+          transactionId: ledgerTransactionId,
+          walletId: request.walletId,
+          amount: request.amountMinor,
+          metadata: {
+            withdrawalRequestId: request.id,
+            providerTransferId: event.providerTransferId,
+            completedAt: event.occurredAt,
+          },
+        });
+
+        console.log(
+          `[BaasWebhookService] Withdrawal completed: requestId=${request.id}, ` +
+            `walletId=${request.walletId}, userId=${request.userId}, ` +
+            `amountMinor=${request.amountMinor}`
+        );
+      } else if (event.status === "FAILED" || event.status === "REVERSED") {
+        // Mark as failed
+        await withdrawalService.failWithdrawalTransfer(
+          transfer.id,
+          event.failureReason || `Provider reported ${event.status}`
+        );
+
+        // Reverse in ledger: return from pending_withdrawal to member_equity
+        const ledgerTransactionId = `withdrawal_reverse_${request.id}`;
+        await ledgerService.reversePendingWithdrawal({
+          transactionId: ledgerTransactionId,
+          walletId: request.walletId,
+          userId: request.userId,
+          amount: request.amountMinor,
+          metadata: {
+            withdrawalRequestId: request.id,
+            providerTransferId: event.providerTransferId,
+            failureReason: event.failureReason,
+            failedAt: event.occurredAt,
+          },
+        });
+
+        console.warn(
+          `[BaasWebhookService] Withdrawal failed/reversed: requestId=${request.id}, ` +
+            `walletId=${request.walletId}, userId=${request.userId}, ` +
+            `reason="${event.failureReason || 'Unknown'}"`
+        );
+
+        // TODO: Emit alert/notification for failed withdrawal
+      }
+    } catch (err) {
+      console.error(
+        `[BaasWebhookService] Error processing payout status: ` +
+          `requestId=${request.id}, providerTransferId=${event.providerTransferId}, ` +
+          `error=${String(err)}`
+      );
+      throw err;
     }
   }
 }

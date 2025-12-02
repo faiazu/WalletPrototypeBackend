@@ -1,8 +1,9 @@
 import { prisma } from "../../core/db.js";
 import { PrismaClient, WithdrawalRequest, WithdrawalTransfer } from "../../generated/prisma/client.js";
 import { WithdrawalRequestStatus, WithdrawalTransferStatus, BaasProviderName } from "../../generated/prisma/enums.js";
-import { ledgerService } from "../ledger/ledgerService.js";
 import { isMember } from "./memberService.js";
+import type { BaasService } from "../baas/baasService.js";
+import type { LedgerService } from "../ledger/ledgerService.js";
 
 /**
  * WithdrawalService
@@ -298,6 +299,106 @@ export class WithdrawalService {
         updatedAt: new Date(),
       },
     });
+  }
+
+  /**
+   * Execute complete withdrawal flow
+   * 
+   * Coordinates:
+   * 1. Create withdrawal request
+   * 2. Move funds to pending liability
+   * 3. Initiate provider payout
+   * 4. Create transfer record
+   * 
+   * This is a transactional flow - if any step fails, previous steps are rolled back
+   */
+  async executeWithdrawal({
+    walletId,
+    userId,
+    amountMinor,
+    currency = "USD",
+    metadata,
+    baasService,
+    ledgerService,
+  }: {
+    walletId: string;
+    userId: string;
+    amountMinor: number;
+    currency?: string;
+    metadata?: any;
+    baasService: BaasService;
+    ledgerService: typeof import("../ledger/ledgerService.js").ledgerService;
+  }): Promise<{ request: WithdrawalRequest; transfer: WithdrawalTransfer }> {
+    // Step 1: Create withdrawal request
+    const request = await this.createWithdrawalRequest({
+      walletId,
+      userId,
+      amountMinor,
+      currency,
+      metadata,
+    });
+
+    try {
+      // Step 2: Move funds to pending liability in ledger
+      const ledgerTransactionId = `withdrawal_pending_${request.id}`;
+      await ledgerService.postPendingWithdrawal({
+        transactionId: ledgerTransactionId,
+        walletId,
+        userId,
+        amount: amountMinor,
+        metadata: {
+          withdrawalRequestId: request.id,
+          ...metadata,
+        },
+      });
+
+      // Update request with ledger transaction ID
+      await this.prisma.withdrawalRequest.update({
+        where: { id: request.id },
+        data: { ledgerTransactionId },
+      });
+
+      // Step 3: Initiate provider payout
+      const payoutResult = await baasService.initiatePayout({
+        walletId,
+        userId,
+        amountMinor,
+        currency,
+        reference: request.id,
+        metadata: {
+          withdrawalRequestId: request.id,
+          ...metadata,
+        },
+      });
+
+      // Step 4: Create withdrawal transfer record
+      const transfer = await this.createWithdrawalTransfer({
+        withdrawalRequestId: request.id,
+        providerName: payoutResult.provider,
+        providerTransferId: payoutResult.externalTransferId,
+        amountMinor,
+        currency,
+        metadata: {
+          payoutStatus: payoutResult.status,
+          estimatedCompletion: payoutResult.estimatedCompletionDate,
+          ...metadata,
+        },
+      });
+
+      return { request, transfer };
+    } catch (err) {
+      // If any step fails, mark request as failed
+      await this.prisma.withdrawalRequest.update({
+        where: { id: request.id },
+        data: {
+          status: WithdrawalRequestStatus.FAILED,
+          failureReason: err instanceof Error ? err.message : "Unknown error",
+          failedAt: new Date(),
+        },
+      });
+
+      throw err;
+    }
   }
 }
 

@@ -2,6 +2,7 @@ import express from "express";
 
 import { authMiddleware } from "../../core/authMiddleware.js";
 import { prisma } from "../../core/db.js";
+import { withdrawalService } from "../../services/wallet/withdrawalService.js";
 
 const router = express.Router();
 
@@ -121,6 +122,11 @@ router.get("/overview", authMiddleware, async (req, res) => {
 
   const myCardWalletIds = new Set<string>(myWalletCards.map((c) => c.walletId));
 
+  // Fetch recent withdrawal history for the user (last 10)
+  const withdrawals = await withdrawalService.getWithdrawalsByUser(userId, {
+    limit: 10,
+  });
+
   const wallets = memberships.map((membership) => {
     const wallet = membership.wallet!;
     return {
@@ -155,6 +161,18 @@ router.get("/overview", authMiddleware, async (req, res) => {
       providerName: card.providerName,
       nickname: card.nickname,
       createdAt: card.createdAt,
+    })),
+    recentWithdrawals: withdrawals.map((w) => ({
+      id: w.id,
+      walletId: w.walletId,
+      walletName: w.wallet?.name,
+      amountMinor: w.amountMinor,
+      currency: w.currency,
+      status: w.status,
+      createdAt: w.createdAt,
+      completedAt: w.completedAt,
+      failedAt: w.failedAt,
+      failureReason: w.failureReason,
     })),
   });
 });

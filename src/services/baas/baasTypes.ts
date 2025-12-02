@@ -15,6 +15,7 @@ export type BaasEventType =
   | "CARD_AUTH_REVERSAL"
   | "CARD_CLEARING"
   | "WALLET_FUNDING"
+  | "PAYOUT_STATUS"
   | "KYC_VERIFICATION"
   | "ACCOUNT_STATUS"
   | "CARD_STATUS";
@@ -131,6 +132,7 @@ export type NormalizedBaasEvent =
   | NormalizedCardAuthReversalEvent
   | NormalizedCardClearingEvent
   | NormalizedWalletFundingEvent
+  | NormalizedPayoutStatusEvent
   | NormalizedKycVerificationEvent
   | NormalizedAccountStatusEvent
   | NormalizedCardStatusEvent;

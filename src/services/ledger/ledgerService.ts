@@ -40,6 +40,31 @@ export const ledgerService = {
     return account;
   },
 
+  async getPendingWithdrawalAccount(walletId: string): Promise<LedgerAccount> {
+    // Find or create pending withdrawal liability account
+    let account = await prisma.ledgerAccount.findFirst({
+      where: {
+        walletId,
+        userId: null,
+        type: "pending_withdrawal"
+      }
+    });
+
+    if (!account) {
+      // Create it on first use
+      account = await prisma.ledgerAccount.create({
+        data: {
+          walletId,
+          userId: null,
+          type: "pending_withdrawal",
+          balance: 0,
+        }
+      });
+    }
+
+    return account;
+  },
+
   async getWalletLedgerAccounts(walletId: string): Promise<LedgerAccount[]> {
     return prisma.ledgerAccount.findMany({
       where: { walletId: walletId }
@@ -116,9 +141,11 @@ export const ledgerService = {
   },
 
   //
-  // POST WITHDRAWAL
+  // POST WITHDRAWAL (Legacy - immediate)
   // Debit: member_equity[user]
   // Credit: wallet_pool
+  //
+  // NOTE: For real withdrawals with provider payouts, use postPendingWithdrawal
   //
   async postWithdrawal({
     transactionId,
@@ -151,6 +178,133 @@ export const ledgerService = {
           amount,
           metadata: {
             type: "withdrawal",
+            ...metadata
+          }
+        }
+      ]
+    });
+  },
+
+  //
+  // POST PENDING WITHDRAWAL
+  // Move funds to pending account until provider confirms
+  // Debit: member_equity[user]
+  // Credit: pending_withdrawal
+  //
+  async postPendingWithdrawal({
+    transactionId,
+    walletId,
+    userId,
+    amount,
+    metadata
+  }: {
+    transactionId: string,
+    walletId: string,
+    userId: string,
+    amount: number,
+    metadata?: any
+  }) {
+    const member = await this.getMemberEquityAccount(walletId, userId);
+    const pending = await this.getPendingWithdrawalAccount(walletId);
+
+    // Validate equity
+    if (member.balance < amount) {
+      throw new Error("InsufficientEquity");
+    }
+
+    return postingEngine.post({
+      transactionId,
+      entries: [
+        {
+          debitAccountId: member.id,
+          creditAccountId: pending.id,
+          amount,
+          metadata: {
+            type: "pending_withdrawal",
+            ...metadata
+          }
+        }
+      ]
+    });
+  },
+
+  //
+  // FINALIZE WITHDRAWAL
+  // Complete a pending withdrawal after provider confirms
+  // Debit: pending_withdrawal
+  // Credit: wallet_pool
+  //
+  async finalizeWithdrawal({
+    transactionId,
+    walletId,
+    amount,
+    metadata
+  }: {
+    transactionId: string,
+    walletId: string,
+    amount: number,
+    metadata?: any
+  }) {
+    const pool = await this.getWalletPoolAccount(walletId);
+    const pending = await this.getPendingWithdrawalAccount(walletId);
+
+    // Validate pending has sufficient funds
+    if (pending.balance < amount) {
+      throw new Error("InsufficientPendingBalance");
+    }
+
+    return postingEngine.post({
+      transactionId,
+      entries: [
+        {
+          debitAccountId: pending.id,
+          creditAccountId: pool.id,
+          amount,
+          metadata: {
+            type: "withdrawal_finalization",
+            ...metadata
+          }
+        }
+      ]
+    });
+  },
+
+  //
+  // REVERSE PENDING WITHDRAWAL
+  // Return funds to member equity if payout fails
+  // Debit: pending_withdrawal
+  // Credit: member_equity[user]
+  //
+  async reversePendingWithdrawal({
+    transactionId,
+    walletId,
+    userId,
+    amount,
+    metadata
+  }: {
+    transactionId: string,
+    walletId: string,
+    userId: string,
+    amount: number,
+    metadata?: any
+  }) {
+    const member = await this.getMemberEquityAccount(walletId, userId);
+    const pending = await this.getPendingWithdrawalAccount(walletId);
+
+    // Validate pending has sufficient funds
+    if (pending.balance < amount) {
+      throw new Error("InsufficientPendingBalance");
+    }
+
+    return postingEngine.post({
+      transactionId,
+      entries: [
+        {
+          debitAccountId: pending.id,
+          creditAccountId: member.id,
+          amount,
+          metadata: {
+            type: "withdrawal_reversal",
             ...metadata
           }
         }
