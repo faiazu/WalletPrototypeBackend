@@ -24,6 +24,11 @@ enum AuthHoldStatus {
   EXPIRED
 }
 
+enum WalletSpendPolicy {
+  PAYER_ONLY
+  EQUAL_SPLIT
+}
+
 model User {
   id             String          @id @default(uuid())
   email          String          @unique
@@ -48,6 +53,7 @@ model Wallet {
   adminId                    String
   createdAt                  DateTime           @default(now())
   providerFinancialAccountId String?
+  spendPolicy                WalletSpendPolicy  @default(PAYER_ONLY)
   cards                      Card[]
   ledgerAccounts             LedgerAccount[]
   admin                      User               @relation("WalletAdmin", fields: [adminId], references: [id])

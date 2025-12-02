@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BaasProviderName } from "../../generated/prisma/client.js";
+import { BaasProviderName, WalletSpendPolicy } from "../../generated/prisma/client.js";
 
 export const createWalletSchema = z.object({
   name: z.string().min(1, "Wallet name is required"),
@@ -16,4 +16,8 @@ export const createFundingRouteSchema = z.object({
   reference: z.string().optional(),
   userId: z.string().uuid("Valid user ID is required"),
   baasAccountId: z.string().optional(),
+});
+
+export const updateSpendPolicySchema = z.object({
+  spendPolicy: z.nativeEnum(WalletSpendPolicy),
 });

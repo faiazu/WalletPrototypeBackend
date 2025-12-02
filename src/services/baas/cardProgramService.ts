@@ -12,6 +12,7 @@ import type {
 } from "./baasTypes.js";
 
 import { AuthHoldStatus } from "../../generated/prisma/enums.js";
+import type { SplittingPolicyService } from "../wallet/splittingPolicyService.js";
 
 /**
  * Simple APPROVE/DECLINE decision type for card authorizations
@@ -38,6 +39,7 @@ export interface LedgerServiceForCardProgram {
 export interface CardProgramServiceDeps {
   prisma: PrismaClient;
   ledger: LedgerServiceForCardProgram;
+  splittingPolicyService: SplittingPolicyService;
 }
 
 /**
@@ -52,10 +54,12 @@ export interface CardProgramServiceDeps {
 export class CardProgramService {
   private prisma: PrismaClient;
   private ledger: LedgerServiceForCardProgram;
+  private splittingPolicyService: SplittingPolicyService;
 
   constructor(deps: CardProgramServiceDeps) {
     this.prisma = deps.prisma;
     this.ledger = deps.ledger;
+    this.splittingPolicyService = deps.splittingPolicyService;
   }
 
   /**
@@ -207,10 +211,9 @@ export class CardProgramService {
    *
    * This is where we actually move money in the internal ledger.
    *
-   * v1 rule:
-   *  - The user whose card was used (card.userId) is the "payer".
-   *  - The entire transaction amount is allocated to that user.
-   *    (Splitting to be added later)
+   * Splitting logic is now driven by wallet spend policy:
+   *  - PAYER_ONLY: cardholder pays 100%
+   *  - EQUAL_SPLIT: amount divided equally among all wallet members
    */
   async handleClearing(event: NormalizedCardClearingEvent): Promise<void> {
     const card = await this.findCardByExternalId(event.providerCardId);
@@ -230,15 +233,20 @@ export class CardProgramService {
       return;
     }
 
-    const payingUserId = card.userId;
+    const cardholderUserId = card.userId;
 
-    // Simple v1 split: payer owns 100% of the spend.
-    const splits = [
-      {
-        userId: payingUserId,
-        amount: event.amountMinor,
-      },
-    ];
+    // Calculate splits based on wallet's spend policy
+    const policyBasedSplits = await this.splittingPolicyService.calculateSplits(
+      walletId,
+      cardholderUserId,
+      event.amountMinor
+    );
+
+    // Convert to ledger format
+    const splits = policyBasedSplits.map(split => ({
+      userId: split.userId,
+      amount: split.amountMinor,
+    }));
 
     const metadata = {
       provider: event.provider,
@@ -292,7 +300,8 @@ export class CardProgramService {
 
     console.log(
       `[CardProgramService] Clearing posted to ledger: walletId=${walletId}, ` +
-        `payingUserId=${payingUserId}, amountMinor=${event.amountMinor} ${event.currency}`
+        `cardholderUserId=${cardholderUserId}, amountMinor=${event.amountMinor} ${event.currency}, ` +
+        `splits=${JSON.stringify(splits)}`
     );
   }
 

@@ -5,6 +5,9 @@ import { prisma } from "./db.js";
 // Ledger
 import { ledgerService } from "../services/ledger/ledgerService.js";
 
+// Wallet services
+import { splittingPolicyService } from "../services/wallet/splittingPolicyService.js";
+
 // BaaS outbound services (customer + card creation, funding, etc)
 import { MockBaasClient } from "../services/baas/baasClient.js";
 import { BaasService } from "../services/baas/baasService.js";
@@ -50,6 +53,7 @@ export const cardProgramService = new CardProgramService({
     getWalletPoolBalance: ledgerService.getWalletPoolBalance.bind(ledgerService),
     postCardCapture: ledgerService.postCardCapture.bind(ledgerService),  
   }, // adapt the BaasService's ledgerService
+  splittingPolicyService, // inject the splitting policy service
 });
 
 // BaaS Webhook Service - used by provider webhook routes

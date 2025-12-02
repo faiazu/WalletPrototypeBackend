@@ -5,9 +5,10 @@ import { prisma } from "../../core/db.js";
 import { addMember, isMember } from "../../services/wallet/memberService.js";
 import { requireUserByEmail } from "../../services/user/userService.js";
 import { walletService } from "../../services/wallet/walletService.js";
-import { createWalletSchema, inviteSchema, createFundingRouteSchema } from "./validator.js";
+import { createWalletSchema, inviteSchema, createFundingRouteSchema, updateSpendPolicySchema } from "./validator.js";
 import { fundingRouteService } from "../../services/baas/fundingRouteService.js";
 import { ledgerService } from "../../services/ledger/ledgerService.js";
+import { splittingPolicyService } from "../../services/wallet/splittingPolicyService.js";
 
 /**
  * Controller for creating a wallet.
@@ -235,6 +236,48 @@ export const listFundingRoutes = [
       return res.json({ routes });
     } catch (err: any) {
       return res.status(400).json({ error: err.message || "Failed to list funding routes" });
+    }
+  },
+];
+
+/**
+ * Update wallet spend policy (admin only).
+ */
+export const updateSpendPolicy = [
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const walletId = req.params.id!;
+
+      // Only wallet admin can update spend policy
+      if (!(await walletService.isWalletAdmin(walletId, userId))) {
+        return res.status(403).json({ 
+          error: "AccessDenied", 
+          message: "Only wallet admin can update spend policy." 
+        });
+      }
+
+      const { spendPolicy } = updateSpendPolicySchema.parse(req.body);
+
+      // Update wallet spend policy
+      const updatedWallet = await prisma.wallet.update({
+        where: { id: walletId },
+        data: { spendPolicy },
+      });
+
+      // Invalidate cache so next card clearing uses new policy
+      splittingPolicyService.invalidateCache(walletId);
+
+      return res.json({ 
+        wallet: updatedWallet,
+        message: "Spend policy updated successfully"
+      });
+    } catch (err: any) {
+      if (err.name === "ZodError") {
+        return res.status(400).json({ error: "Invalid request body", details: err.errors });
+      }
+      return res.status(400).json({ error: err.message || "Failed to update spend policy" });
     }
   },
 ];
