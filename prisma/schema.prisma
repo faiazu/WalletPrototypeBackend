@@ -29,6 +29,22 @@ enum WalletSpendPolicy {
   EQUAL_SPLIT
 }
 
+enum WithdrawalRequestStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum WithdrawalTransferStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
 model User {
   id             String          @id @default(uuid())
   email          String          @unique
@@ -41,10 +57,11 @@ model User {
   memberships    WalletMember[]
 
   baasCustomer      BaasCustomer?
-  baasCards         BaasCard[]
-  baasFundingRoutes BaasFundingRoute[]
-  cardAuthHolds     CardAuthHold[]
-  baasAccounts      BaasAccount[]
+  baasCards          BaasCard[]
+  baasFundingRoutes  BaasFundingRoute[]
+  cardAuthHolds      CardAuthHold[]
+  baasAccounts       BaasAccount[]
+  withdrawalRequests WithdrawalRequest[]
 }
 
 model Wallet {
@@ -63,6 +80,7 @@ model Wallet {
   baasAccounts               BaasAccount[]
   baasFundingRoutes          BaasFundingRoute[]
   cardAuthHolds              CardAuthHold[]
+  withdrawalRequests         WithdrawalRequest[]
 }
 
 model WalletBalance {
@@ -222,4 +240,49 @@ model CardAuthHold {
   user   User   @relation(fields: [userId], references: [id])
 
   @@unique([providerName, providerAuthId])
+}
+
+model WithdrawalRequest {
+  id                String                   @id @default(cuid())
+  walletId          String
+  userId            String
+  amountMinor       Int
+  currency          String                   @default("USD")
+  status            WithdrawalRequestStatus  @default(PENDING)
+  ledgerTransactionId String?                // Link to ledger transaction
+  failureReason     String?
+  metadata          Json?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  completedAt       DateTime?
+  failedAt          DateTime?
+
+  wallet    Wallet                 @relation(fields: [walletId], references: [id])
+  user      User                   @relation(fields: [userId], references: [id])
+  transfers WithdrawalTransfer[]
+
+  @@index([walletId, status])
+  @@index([userId, status])
+}
+
+model WithdrawalTransfer {
+  id                  String                   @id @default(cuid())
+  withdrawalRequestId String
+  providerName        BaasProviderName
+  providerTransferId  String?                  // External payout/transfer ID
+  amountMinor         Int
+  currency            String                   @default("USD")
+  status              WithdrawalTransferStatus @default(PENDING)
+  failureReason       String?
+  metadata            Json?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  completedAt         DateTime?
+  failedAt            DateTime?
+
+  withdrawalRequest WithdrawalRequest @relation(fields: [withdrawalRequestId], references: [id])
+
+  @@unique([providerName, providerTransferId])
+  @@index([withdrawalRequestId])
+  @@index([status])
 }

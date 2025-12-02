@@ -13,12 +13,14 @@ import type {
   CreateCardParams,
   CreateCardResult,
   CreateAccountResult,
+  InitiatePayoutParams,
+  InitiatePayoutResult,
 } from "./baasClient.js";
 
 import type {
   BaasClient,
 } from "./baasClient.js";
-import { supportsAccountCreation } from "./baasClient.js";
+import { supportsAccountCreation, supportsPayouts } from "./baasClient.js";
 import { buildEmbossName } from "./synctera/embossNameHelper.js";
 
 export class BaasService {
@@ -287,5 +289,62 @@ export class BaasService {
       where: { externalCardId, providerName: this.provider },
       data: { status, updatedAt: new Date() },
     });
+  }
+
+  /**
+   * Initiate a payout/withdrawal from a BaaS account
+   * 
+   * @param walletId - Wallet ID for context
+   * @param userId - User ID requesting withdrawal
+   * @param amountMinor - Amount in minor units (cents)
+   * @param reference - Internal reference (withdrawal request ID)
+   * @returns Payout result with provider transfer ID
+   */
+  async initiatePayout({
+    walletId,
+    userId,
+    amountMinor,
+    currency = "USD",
+    reference,
+    metadata,
+  }: {
+    walletId: string;
+    userId: string;
+    amountMinor: number;
+    currency?: string;
+    reference?: string;
+    metadata?: any;
+  }): Promise<InitiatePayoutResult> {
+    // Check if provider supports payouts
+    if (!supportsPayouts(this.client)) {
+      throw new Error("ProviderDoesNotSupportPayouts");
+    }
+
+    // Get the user's BaaS account
+    const account = await this.ensureAccountForUser(userId, walletId);
+
+    // Prepare payout parameters
+    const payoutParams: InitiatePayoutParams = {
+      externalAccountId: account.externalAccountId,
+      amountMinor,
+      currency,
+      reference,
+      metadata: {
+        ...metadata,
+        walletId,
+        userId,
+        divviWithdrawalRequestId: reference,
+      },
+    };
+
+    // Call provider to initiate payout
+    const result = await this.client.initiatePayout(payoutParams);
+
+    console.log(
+      `[BaasService] Payout initiated: walletId=${walletId}, userId=${userId}, ` +
+        `amountMinor=${amountMinor}, providerTransferId=${result.externalTransferId}`
+    );
+
+    return result;
   }
 }

@@ -66,6 +66,27 @@ export interface CreateCardResult {
 }
 
 /**
+ * Parameters to initiate a payout/withdrawal from BaaS
+ */
+export interface InitiatePayoutParams {
+  externalAccountId: string;  // provider's account id to withdraw from
+  amountMinor: number;        // amount in minor units (cents)
+  currency: string;           // e.g. "USD"
+  reference?: string;         // internal reference/idempotency key
+  metadata?: any;             // additional provider-specific data
+}
+
+/**
+ * Result returned when a payout has been initiated
+ */
+export interface InitiatePayoutResult {
+  provider: BaasProviderName;
+  externalTransferId: string; // provider's transfer/payout id
+  status?: string;            // e.g. "PENDING", "PROCESSING"
+  estimatedCompletionDate?: string;
+}
+
+/**
  * BaasClient defines the minimal set of operations Divvi can ask a BaaS to perform.
  * Each concrete implementation (Mock, Stripe, Lithic, etc.) will implement this.
  */
@@ -74,6 +95,7 @@ export interface BaasClient {
   createCard(params: CreateCardParams): Promise<CreateCardResult>;
   createAccount?(params: CreateAccountParams): Promise<CreateAccountResult>;
   updateCardStatus?(cardId: string, status: string): Promise<void>;
+  initiatePayout?(params: InitiatePayoutParams): Promise<InitiatePayoutResult>;
   // later: getProgramBalance, initiateTransfer, freezeCard, etc.
 }
 
@@ -81,6 +103,12 @@ export function supportsAccountCreation(
   client: BaasClient
 ): client is BaasClient & { createAccount: (params: CreateAccountParams) => Promise<CreateAccountResult> } {
   return typeof (client as any)?.createAccount === "function";
+}
+
+export function supportsPayouts(
+  client: BaasClient
+): client is BaasClient & { initiatePayout: (params: InitiatePayoutParams) => Promise<InitiatePayoutResult> } {
+  return typeof (client as any)?.initiatePayout === "function";
 }
 
 /**
@@ -120,5 +148,22 @@ export class MockBaasClient implements BaasClient {
   async updateCardStatus(_cardId: string, _status: string): Promise<void> {
     // no-op for mock
     return;
+  }
+
+  async initiatePayout(params: InitiatePayoutParams): Promise<InitiatePayoutResult> {
+    // Mock payout - auto-completes immediately
+    const externalTransferId = `mock_payout_${params.externalAccountId}_${Date.now()}`;
+    
+    console.log(
+      `[MockBaasClient] Simulated payout initiated: ${params.amountMinor} ${params.currency} from ${params.externalAccountId}`
+    );
+
+    // For mock, we'll simulate immediate completion
+    // In real implementation, this would be async and confirmed via webhook
+    return {
+      provider: this.provider,
+      externalTransferId,
+      status: "COMPLETED", // Mock auto-completes
+    };
   }
 }
