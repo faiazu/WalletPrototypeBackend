@@ -150,3 +150,229 @@
 ## Webhooks (server-facing)
 - `POST /webhooks/synctera` — raw body, Synctera signature headers (handled server-side)
 - `POST /webhooks/baas/:provider` — mock provider webhooks (for testing)
+
+## Withdrawals (Phase 2)
+
+### Create Withdrawal
+- `POST /wallet/:id/withdrawals`
+  - Body: `{ "amountMinor": 50000, "currency": "USD", "metadata": {} }`
+  - Response: `{ "withdrawalRequest": {...}, "withdrawalTransfer": {...}, "message": "..." }`
+  - Requires: Wallet membership, sufficient equity
+  - Flow: Creates request, moves funds to pending, initiates provider payout
+
+### List Withdrawals
+- `GET /wallet/:id/withdrawals?limit=50&offset=0&status=PENDING`
+  - Response: `{ "withdrawals": [...], "count": 10, "limit": 50, "offset": 0 }`
+  - Requires: Wallet membership
+
+### Get Withdrawal Details
+- `GET /wallet/:id/withdrawals/:withdrawalId`
+  - Response: `{ "withdrawal": { "id": "...", "status": "...", "transfers": [...] } }`
+  - Requires: Wallet membership
+
+### Withdrawal Statuses
+- `PENDING` - Request created, not yet processed
+- `PROCESSING` - Provider payout initiated
+- `COMPLETED` - Payout confirmed by provider
+- `FAILED` - Payout failed (funds returned to equity)
+- `CANCELLED` - Cancelled before processing
+
+## Wallet Configuration (Admin Only)
+
+### Funding Routes
+- `POST /wallet/:id/funding-routes`
+  - Body: `{ "providerName": "MOCK", "providerAccountId": "...", "reference": "", "userId": "...", "baasAccountId": "..." }`
+  - Response: `{ "route": {...} }`
+  - Requires: Wallet admin
+  - Purpose: Map inbound funding to specific wallets/users
+
+- `GET /wallet/:id/funding-routes`
+  - Response: `{ "routes": [...] }`
+  - Requires: Wallet membership
+
+### Spend Policy
+- `PATCH /wallet/:id/spend-policy`
+  - Body: `{ "spendPolicy": "PAYER_ONLY" | "EQUAL_SPLIT" }`
+  - Response: `{ "wallet": {...}, "message": "..." }`
+  - Requires: Wallet admin
+  - Purpose: Configure how card transactions are split among members
+
+## Simulation & Testing
+
+### End-to-End Simulation Runner
+
+Run a complete platform simulation from KYC through transactions:
+
+```bash
+# Basic simulation
+npm run simulate
+
+# Custom configuration
+npm run simulate -- \
+  --wallet-name "Demo Wallet" \
+  --deposit-amount 100000 \
+  --spend-amount 10000 \
+  --funding-amount 25000 \
+  --withdrawal-amount 15000 \
+  --export demo-results.json \
+  --verbose
+
+# Skip withdrawal flow
+npm run simulate -- --skip-withdrawal
+
+# CI mode with JSON export
+npm run simulate:ci
+```
+
+**CLI Options**:
+- `--wallet-name <name>` - Wallet name (default: "Demo Wallet")
+- `--deposit-amount <cents>` - Initial deposit (default: 50000 = $500)
+- `--spend-amount <cents>` - Card transaction (default: 5000 = $50)
+- `--funding-amount <cents>` - Inbound funding (default: 10000 = $100)
+- `--withdrawal-amount <cents>` - Withdrawal request (default: 10000 = $100)
+- `--provider <name>` - BaaS provider (default: "MOCK")
+- `--verbose` - Detailed logging
+- `--export <file>` - Export JSON results
+- `--skip-withdrawal` - Skip withdrawal flow
+- `--base-url <url>` - API URL (default: http://localhost:3000)
+
+**Simulation Steps**:
+1. Authentication (Christopher demo user)
+2. KYC Verification
+3. Wallet Creation
+4. Card Issuance
+5. Initial Deposit
+6. Card Authorization
+7. Card Clearing
+8. Wallet Funding (inbound ACH)
+9. Withdrawal Request
+10. Payout Completion
+11. Ledger Validation
+
+**Output**: Console summary + optional JSON export with full step details, balances, and validation results.
+
+**JSON Export Structure**:
+```json
+{
+  "simulationId": "sim_...",
+  "timestamp": "2024-12-02T10:30:00Z",
+  "config": { "walletName": "...", "depositAmount": 50000, ... },
+  "steps": [
+    { "step": 1, "name": "authentication", "status": "success", "duration": 120, "data": {...} },
+    ...
+  ],
+  "finalState": {
+    "walletId": "...",
+    "balances": {...},
+    "ledgerInvariant": {...}
+  },
+  "validation": {
+    "allStepsSuccessful": true,
+    "ledgerInvariantPassed": true,
+    "balancesMatch": true,
+    "errors": []
+  },
+  "duration": 3245,
+  "success": true
+}
+```
+
+### Test-Only Routes (Development)
+
+**IMPORTANT**: These routes are only available when `NODE_ENV !== "production"`.
+
+#### Ledger Testing
+- `POST /test/ledger/deposit/:walletId` - Direct deposit (bypasses BaaS)
+- `POST /test/ledger/withdraw/:walletId` - Direct withdrawal (bypasses BaaS)
+- `POST /test/ledger/card-capture/:walletId` - Direct card capture
+- `GET /test/ledger/reconciliation/:walletId` - Ledger reconciliation
+
+#### BaaS Testing
+- `GET /test/baas/holds` - List all auth holds
+- `POST /test/baas/funding` - Trigger WALLET_FUNDING event
+  - Body: `{ "providerAccountId": "...", "amountMinor": 10000, "currency": "USD", "reference": "" }`
+- `POST /test/baas/payout-status` - Trigger PAYOUT_STATUS webhook
+  - Body: `{ "providerTransferId": "...", "status": "COMPLETED" | "FAILED" | "REVERSED", "failureReason": "..." }`
+- `POST /test/baas/reset` - **DANGEROUS**: Reset database state (preserves users only)
+- `GET /test/state` - Get current system entity counts
+
+#### Auth Testing
+- `POST /test/auth/login` - Mock login
+- `POST /test/auth/register` - Mock registration
+- `GET /test/auth/list-users` - List all users
+
+**Security**: All test routes are automatically disabled in production environments.
+
+## Example Workflows
+
+### Quick Demo Flow
+
+```bash
+# 1. Start server
+npm run dev
+
+# 2. Run simulation
+npm run simulate
+
+# 3. View results in console
+```
+
+### Partner Integration Testing
+
+```bash
+# 1. Run simulation with export
+npm run simulate -- \
+  --wallet-name "Synctera Integration" \
+  --export synctera-demo.json \
+  --verbose
+
+# 2. Share synctera-demo.json with partner
+# Contains full trace of API calls and ledger state
+```
+
+### Manual Testing Sequence
+
+```bash
+# 1. Login
+curl -X POST http://localhost:3000/auth/login-christopher
+
+# 2. Create wallet
+curl -X POST http://localhost:3000/wallet/create \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Test Wallet"}'
+
+# 3. Issue card
+curl -X POST http://localhost:3000/wallets/<walletId>/cards \
+  -H "Authorization: Bearer <token>"
+
+# 4. Deposit funds
+curl -X POST http://localhost:3000/test/ledger/deposit/<walletId> \
+  -H "Authorization: Bearer <token>" \
+  -d '{"amount": 100000}'
+
+# 5. Simulate card clearing
+curl -X POST http://localhost:3000/webhooks/baas/mock \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "CARD_CLEARING",
+    "provider": "MOCK",
+    "providerEventId": "evt_123",
+    "providerTransactionId": "tx_456",
+    "providerCardId": "<externalCardId>",
+    "amountMinor": 5000,
+    "currency": "USD",
+    "occurredAt": "2024-12-02T10:00:00Z"
+  }'
+
+# 6. Check balances
+curl -X GET http://localhost:3000/wallet/<walletId> \
+  -H "Authorization: Bearer <token>"
+```
+
+## Related Documentation
+
+- [Simulation Design](SIMULATION_DESIGN.md) - Detailed simulation architecture
+- [Withdrawal & Payout](WITHDRAWAL_PAYOUT.md) - Withdrawal pipeline details
+- [Spend Splitting](SPEND_SPLITTING.md) - Spend policy documentation
+- [Test Scripts](../src/tests/scripts/README.md) - Integration test suite

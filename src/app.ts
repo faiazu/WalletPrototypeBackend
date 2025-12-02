@@ -39,6 +39,10 @@ export function createApp(): Application {
 
     // Mock BaaS debug routes
     app.use("/test/baas/holds", mockBaas.holds);
+    app.use("/test/baas/funding", mockBaas.funding);
+    app.use("/test/baas/payout-status", mockBaas.payoutStatus);
+    app.use("/test/baas/reset", mockBaas.reset);
+    app.use("/test/state", mockBaas.state);
   }
 
 
