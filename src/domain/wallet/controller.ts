@@ -5,7 +5,8 @@ import { prisma } from "../../core/db.js";
 import { addMember, isMember } from "../../services/wallet/memberService.js";
 import { requireUserByEmail } from "../../services/user/userService.js";
 import { walletService } from "../../services/wallet/walletService.js";
-import { createWalletSchema, inviteSchema } from "./validator.js";
+import { createWalletSchema, inviteSchema, createFundingRouteSchema } from "./validator.js";
+import { fundingRouteService } from "../../services/baas/fundingRouteService.js";
 import { ledgerService } from "../../services/ledger/ledgerService.js";
 
 /**
@@ -155,6 +156,85 @@ export const getWalletDetails = [
       return res.json({ wallet, balances });
     } catch (err: any) {
       return res.status(400).json({ error: err.message || "Failed to fetch wallet" });
+    }
+  },
+];
+
+/**
+ * Create a funding route for a wallet.
+ * Admin only.
+ */
+export const createFundingRoute = [
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const walletId = req.params.id!;
+
+      // Verify wallet exists and user is admin
+      const wallet = await walletService.getWalletById(walletId);
+      if (!wallet) return res.status(404).json({ error: "Wallet not found" });
+
+      const isAdmin = await walletService.isWalletAdmin(walletId, userId);
+      if (!isAdmin) {
+        return res.status(403).json({ error: "Only wallet admin can manage funding routes" });
+      }
+
+      const { providerName, providerAccountId, reference, userId: routeUserId, baasAccountId } =
+        createFundingRouteSchema.parse(req.body);
+
+      // Verify the target user is a member of the wallet
+      const targetUserMember = await isMember(walletId, routeUserId);
+      if (!targetUserMember) {
+        return res.status(400).json({ error: "Target user must be a wallet member" });
+      }
+
+      const route = await fundingRouteService.upsertRoute({
+        providerName,
+        providerAccountId,
+        reference,
+        walletId,
+        userId: routeUserId,
+        baasAccountId,
+      });
+
+      return res.status(201).json({ route });
+    } catch (err: any) {
+      if (err.name === "ZodError") {
+        return res.status(400).json({ error: "Invalid request body", details: err.errors });
+      }
+
+      return res.status(400).json({ error: err.message || "Failed to create funding route" });
+    }
+  },
+];
+
+/**
+ * List funding routes for a wallet.
+ * Admin or member can view.
+ */
+export const listFundingRoutes = [
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const walletId = req.params.id!;
+
+      // Verify wallet exists and user has access
+      const wallet = await walletService.getWalletById(walletId);
+      if (!wallet) return res.status(404).json({ error: "Wallet not found" });
+
+      const isAdmin = await walletService.isWalletAdmin(walletId, userId);
+      const member = await isMember(walletId, userId);
+      if (!isAdmin && !member) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const routes = await fundingRouteService.listByWallet(walletId);
+
+      return res.json({ routes });
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message || "Failed to list funding routes" });
     }
   },
 ];

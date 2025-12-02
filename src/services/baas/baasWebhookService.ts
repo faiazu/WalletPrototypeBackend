@@ -18,6 +18,8 @@ import type {
   NormalizedCardStatusEvent,
 } from "./baasTypes.js";
 
+import { fundingRouteService } from "./fundingRouteService.js";
+
 import type { CardProgramService, CardAuthDecision } from "./cardProgramService.js";
 
 /**
@@ -298,11 +300,27 @@ export class BaasWebhookService {
     const route = await this.findFundingRoute(event);
 
     if (!route) {
-      console.warn(
-        `[BaasWebhookService] Wallet funding route not found: ` +
-          `provider=${event.provider}, accountId=${event.providerAccountId}, reference=${event.reference ?? "null"}`
-      );
+      // Emit structured warning for monitoring/alerting
+      const warning = {
+        severity: "ERROR",
+        code: "FUNDING_ROUTE_NOT_FOUND",
+        message: "Wallet funding route not found after all fallback attempts",
+        context: {
+          provider: event.provider,
+          providerAccountId: event.providerAccountId,
+          reference: event.reference ?? null,
+          providerEventId: event.providerEventId,
+          providerTransactionId: event.providerTransactionId,
+          amountMinor: event.amountMinor,
+          currency: event.currency,
+          timestamp: new Date().toISOString(),
+        },
+      };
+
+      console.error(`[BaasWebhookService] ${JSON.stringify(warning)}`);
+      
       // We still mark the event processed so we don't retry forever.
+      // Ops should monitor these logs to spot misconfigured routes.
       return;
     }
 
@@ -333,6 +351,10 @@ export class BaasWebhookService {
   /**
    * Look up a BaasFundingRoute for a WALLET_FUNDING event.
    *
+   * Attempts fallback strategies:
+   * 1. Try exact match with provided reference
+   * 2. Try default route (empty reference) for the same account
+   *
    * We use:
    *  - providerName = event.provider
    *  - providerAccountId = event.providerAccountId
@@ -341,19 +363,36 @@ export class BaasWebhookService {
   private async findFundingRoute(
     event: NormalizedWalletFundingEvent
   ): Promise<BaasFundingRoute | null> {
-    const referenceValue = event.reference ?? "";
-    const route = await this.prisma.baasFundingRoute.findFirst({
-      where: {
-        providerName: event.provider,
-        providerAccountId: event.providerAccountId,
-        OR:
-          referenceValue === ""
-            ? [{ reference: "" }, { reference: null }]
-            : [{ reference: referenceValue }],
-      },
+    // Try exact match first
+    const route = await fundingRouteService.findRoute({
+      providerName: event.provider,
+      providerAccountId: event.providerAccountId,
+      reference: event.reference,
     });
 
-    return route;
+    if (route) {
+      return route;
+    }
+
+    // Fallback 1: Try default route (empty reference) if specific reference failed
+    if (event.reference) {
+      console.warn(
+        `[BaasWebhookService] Funding route not found with reference="${event.reference}", ` +
+          `trying default route for provider=${event.provider}, accountId=${event.providerAccountId}`
+      );
+
+      const defaultRoute = await fundingRouteService.findRoute({
+        providerName: event.provider,
+        providerAccountId: event.providerAccountId,
+        reference: "",
+      });
+
+      if (defaultRoute) {
+        return defaultRoute;
+      }
+    }
+
+    return null;
   }
 
   private async handleAccountStatus(

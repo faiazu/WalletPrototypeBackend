@@ -95,10 +95,12 @@ export class BaasService {
   /**
    * Ensure there is a BaasAccount for this user/provider.
    * Optionally binds it to a wallet (for routing deposits and card issuance).
+   * @param reference - Optional reference label for funding route (e.g., simulation context)
    */
   async ensureAccountForUser(
     userId: string,
-    walletId?: string
+    walletId?: string,
+    reference?: string
   ): Promise<BaasAccount> {
     if (!supportsAccountCreation(this.client)) {
       throw new Error("AccountCreationNotSupported");
@@ -147,7 +149,8 @@ export class BaasService {
     });
 
     if (walletId) {
-      const fundingReference = "";
+      // Auto-maintain funding route with optional reference label
+      const fundingReference = reference || "";
       await this.prisma.baasFundingRoute.upsert({
         where: {
           providerName_providerAccountId_reference: {
