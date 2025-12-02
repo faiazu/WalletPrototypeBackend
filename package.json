@@ -11,7 +11,8 @@
     "simulate": "tsx scripts/run-simulation.ts",
     "simulate:ci": "tsx scripts/run-simulation.ts --export ci-results.json",
     "validate-results": "tsx scripts/validate-simulation-results.ts",
-    "test:e2e": "npm run simulate:ci && npm run validate-results ci-results.json"
+    "test:e2e": "npm run simulate:ci && npm run validate-results ci-results.json",
+    "test:all-simulations": "./scripts/test-all-simulations.sh"
   },
   "keywords": [],
   "author": "",

@@ -37,12 +37,14 @@ export class WithdrawalService {
     amountMinor,
     currency = "USD",
     metadata,
+    ledgerService,
   }: {
     walletId: string;
     userId: string;
     amountMinor: number;
     currency?: string;
     metadata?: any;
+    ledgerService: typeof import("../ledger/ledgerService.js").ledgerService;
   }): Promise<WithdrawalRequest> {
     // Validate user is wallet member
     if (!(await isMember(walletId, userId))) {
@@ -336,6 +338,7 @@ export class WithdrawalService {
       amountMinor,
       currency,
       metadata,
+      ledgerService,
     });
 
     try {

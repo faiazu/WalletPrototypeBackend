@@ -418,21 +418,26 @@ async function step11_validation(ctx: SimulationContext): Promise<any> {
     ctx.token
   );
 
+  // Calculate expected balances based on whether withdrawal was skipped
+  const withdrawalAmount = config.skipWithdrawal ? 0 : config.withdrawalAmount;
+  
   const expected = {
-    pool: config.depositAmount + config.fundingAmount - config.spendAmount - config.withdrawalAmount,
-    equity: config.depositAmount + config.fundingAmount - config.spendAmount - config.withdrawalAmount,
+    pool: config.depositAmount + config.fundingAmount - config.spendAmount - withdrawalAmount,
+    equity: config.depositAmount + config.fundingAmount - config.spendAmount - withdrawalAmount,
   };
 
   const actualPool = -reconciliation.poolAccount.balance;
-  const actualEquity = reconciliation.sumMemberEquity;
+  const actualEquity = reconciliation.sumOfMemberEquity; // Fixed: was sumMemberEquity
 
   const poolMatch = actualPool === expected.pool;
   const equityMatch = actualEquity === expected.equity;
-  const invariantPass = reconciliation.ledgerInvariant === "PASS";
+  const invariantPass = reconciliation.consistent === true; // Fixed: was ledgerInvariant === "PASS"
+
+  const invariantStatus = reconciliation.consistent ? "PASS" : "FAIL";
 
   log(`   → Wallet Pool: ${formatAmount(actualPool)} (expected: ${formatAmount(expected.pool)}) ${poolMatch ? "✓" : "✗"}`);
   log(`   → Member Equity: ${formatAmount(actualEquity)} (expected: ${formatAmount(expected.equity)}) ${equityMatch ? "✓" : "✗"}`);
-  log(`   → Ledger Invariant: ${reconciliation.ledgerInvariant} ${invariantPass ? "✓" : "✗"}`);
+  log(`   → Ledger Invariant: ${invariantStatus} ${invariantPass ? "✓" : "✗"}`);
 
   return {
     reconciliation,
@@ -467,6 +472,14 @@ async function runSimulation(): Promise<SimulationOutput> {
   console.log("\n🚀 Starting Wallet Platform Simulation");
   printSeparator();
 
+  // Reset database to ensure clean state
+  try {
+    await cliRequest("post", "/test/baas/reset", null);
+    console.log("✓ Database reset complete");
+  } catch (err) {
+    console.warn("⚠ Could not reset database (test endpoint may not be available)");
+  }
+
   console.log("\n📋 Configuration:");
   console.log(`  - Wallet Name: ${config.walletName}`);
   console.log(`  - Deposit: ${formatAmount(config.depositAmount)}`);
@@ -495,6 +508,12 @@ async function runSimulation(): Promise<SimulationOutput> {
     // Small delay to ensure withdrawal is created before completing
     await new Promise(resolve => setTimeout(resolve, 100));
     ctx.logs.push(await executeStep(10, "Payout Completion", () => step10_payoutCompletion(ctx)));
+    // Wait for webhook processing and ledger finalization to complete
+    // This ensures the PAYOUT_STATUS webhook handler has time to:
+    // 1. Process the event
+    // 2. Update WithdrawalTransfer status
+    // 3. Finalize the ledger entry
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
 
   const validationResult = await executeStep(11, "Validation", () => step11_validation(ctx));

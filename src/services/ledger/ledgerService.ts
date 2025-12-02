@@ -253,6 +253,9 @@ export const ledgerService = {
       throw new Error("InsufficientPendingBalance");
     }
 
+    // Finalize withdrawal: money leaves the system
+    // Debit: pending_withdrawal (clear the pending account - reduce its positive balance)
+    // Credit: wallet_pool (reduce liability - make pool balance less negative)
     return postingEngine.post({
       transactionId,
       entries: [

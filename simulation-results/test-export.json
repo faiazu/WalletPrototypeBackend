@@ -1,0 +1,186 @@
+{
+  "simulationId": "sim_1764699932967_jrxxd4",
+  "timestamp": "2025-12-02T18:25:33.701Z",
+  "config": {
+    "walletName": "Demo Wallet",
+    "depositAmount": 50000,
+    "spendAmount": 5000,
+    "fundingAmount": 10000,
+    "withdrawalAmount": 10000,
+    "provider": "MOCK",
+    "verbose": false,
+    "export": "simulation-results/test-export.json",
+    "skipWithdrawal": false,
+    "baseUrl": "http://localhost:3000"
+  },
+  "steps": [
+    {
+      "step": 1,
+      "name": "Authentication",
+      "status": "success",
+      "duration": 2
+    },
+    {
+      "step": 2,
+      "name": "KYC Verification",
+      "status": "success",
+      "duration": 1
+    },
+    {
+      "step": 3,
+      "name": "Wallet Creation",
+      "status": "success",
+      "duration": 9
+    },
+    {
+      "step": 4,
+      "name": "Card Issuance",
+      "status": "success",
+      "duration": 8
+    },
+    {
+      "step": 5,
+      "name": "Initial Deposit",
+      "status": "success",
+      "duration": 6
+    },
+    {
+      "step": 6,
+      "name": "Card Authorization",
+      "status": "success",
+      "duration": 5
+    },
+    {
+      "step": 7,
+      "name": "Card Clearing",
+      "status": "success",
+      "duration": 9
+    },
+    {
+      "step": 8,
+      "name": "Wallet Funding",
+      "status": "success",
+      "duration": 20
+    },
+    {
+      "step": 9,
+      "name": "Withdrawal",
+      "status": "success",
+      "duration": 12
+    },
+    {
+      "step": 10,
+      "name": "Payout Completion",
+      "status": "success",
+      "duration": 26
+    },
+    {
+      "step": 11,
+      "name": "Validation",
+      "status": "success",
+      "duration": 9,
+      "data": {
+        "reconciliation": {
+          "walletId": "8a3e418e-0f23-4d4f-b348-f5e6423571b2",
+          "poolAccount": {
+            "id": "3c6ee41c-197d-4640-b8ba-41239260189f",
+            "walletId": "8a3e418e-0f23-4d4f-b348-f5e6423571b2",
+            "userId": null,
+            "type": "wallet_pool",
+            "balance": -45000,
+            "createdAt": "2025-12-02T18:25:32.999Z"
+          },
+          "memberEquityAccounts": [
+            {
+              "id": "bd9ab9cf-be13-4f6c-97c0-611bb4dda2fe",
+              "walletId": "8a3e418e-0f23-4d4f-b348-f5e6423571b2",
+              "userId": "1ad28654-6f07-4b1b-be90-e990116b1cfa",
+              "type": "member_equity",
+              "balance": 45000,
+              "createdAt": "2025-12-02T18:25:33.000Z"
+            }
+          ],
+          "sumOfMemberEquity": 45000,
+          "consistent": true
+        },
+        "expected": {
+          "pool": 45000,
+          "equity": 45000
+        },
+        "actual": {
+          "pool": 45000,
+          "equity": 45000
+        },
+        "matches": {
+          "pool": true,
+          "equity": true
+        },
+        "invariantPass": true
+      }
+    }
+  ],
+  "finalState": {
+    "walletId": "8a3e418e-0f23-4d4f-b348-f5e6423571b2",
+    "balances": {
+      "walletId": "8a3e418e-0f23-4d4f-b348-f5e6423571b2",
+      "poolAccount": {
+        "id": "3c6ee41c-197d-4640-b8ba-41239260189f",
+        "walletId": "8a3e418e-0f23-4d4f-b348-f5e6423571b2",
+        "userId": null,
+        "type": "wallet_pool",
+        "balance": -45000,
+        "createdAt": "2025-12-02T18:25:32.999Z"
+      },
+      "memberEquityAccounts": [
+        {
+          "id": "bd9ab9cf-be13-4f6c-97c0-611bb4dda2fe",
+          "walletId": "8a3e418e-0f23-4d4f-b348-f5e6423571b2",
+          "userId": "1ad28654-6f07-4b1b-be90-e990116b1cfa",
+          "type": "member_equity",
+          "balance": 45000,
+          "createdAt": "2025-12-02T18:25:33.000Z"
+        }
+      ],
+      "sumOfMemberEquity": 45000,
+      "consistent": true
+    },
+    "transactions": {
+      "deposits": 1,
+      "withdrawals": 1,
+      "cardAuths": 1,
+      "cardClearings": 1,
+      "fundings": 1
+    },
+    "ledgerInvariant": {
+      "walletId": "8a3e418e-0f23-4d4f-b348-f5e6423571b2",
+      "poolAccount": {
+        "id": "3c6ee41c-197d-4640-b8ba-41239260189f",
+        "walletId": "8a3e418e-0f23-4d4f-b348-f5e6423571b2",
+        "userId": null,
+        "type": "wallet_pool",
+        "balance": -45000,
+        "createdAt": "2025-12-02T18:25:32.999Z"
+      },
+      "memberEquityAccounts": [
+        {
+          "id": "bd9ab9cf-be13-4f6c-97c0-611bb4dda2fe",
+          "walletId": "8a3e418e-0f23-4d4f-b348-f5e6423571b2",
+          "userId": "1ad28654-6f07-4b1b-be90-e990116b1cfa",
+          "type": "member_equity",
+          "balance": 45000,
+          "createdAt": "2025-12-02T18:25:33.000Z"
+        }
+      ],
+      "sumOfMemberEquity": 45000,
+      "consistent": true
+    }
+  },
+  "validation": {
+    "allStepsSuccessful": true,
+    "ledgerInvariantPassed": true,
+    "balancesMatch": true,
+    "errors": []
+  },
+  "duration": 733,
+  "success": true
+}
