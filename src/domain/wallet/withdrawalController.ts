@@ -59,8 +59,8 @@ export const createWithdrawal = [
       });
 
       return res.status(201).json({
-        withdrawalRequest: result.request,
-        withdrawalTransfer: result.transfer,
+        request: result.request,
+        transfer: result.transfer,
         message: "Withdrawal initiated successfully",
       });
     } catch (err: any) {

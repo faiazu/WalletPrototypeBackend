@@ -1,6 +1,6 @@
 import { prisma } from "../../core/db.js";
-import { PrismaClient, WithdrawalRequest, WithdrawalTransfer } from "../../generated/prisma/client.js";
-import { WithdrawalRequestStatus, WithdrawalTransferStatus, BaasProviderName } from "../../generated/prisma/enums.js";
+import type { WithdrawalRequest, WithdrawalTransfer } from "@prisma/client";
+import { WithdrawalRequestStatus, WithdrawalTransferStatus } from "../../generated/prisma/client.js";
 import { isMember } from "./memberService.js";
 import type { BaasService } from "../baas/baasService.js";
 import type { LedgerService } from "../ledger/ledgerService.js";

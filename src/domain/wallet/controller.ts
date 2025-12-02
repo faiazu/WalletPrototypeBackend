@@ -77,11 +77,11 @@ export const inviteMember = [
 
       const { email, role } = inviteSchema.parse(req.body);
 
-      const wallet = await walletService.getWalletById(walletId);
-      if (!wallet) return res.status(404).json({ error: "Wallet not found" });
+      const walletForAuth = await walletService.getWalletById(walletId);
+      if (!walletForAuth) return res.status(404).json({ error: "Wallet not found" });
 
       // permission check
-      if (wallet.adminId !== userId)
+      if (walletForAuth.adminId !== userId)
         return res.status(403).json({ error: "Only admin can invite members" });
 
       const invitee = await requireUserByEmail(email);
@@ -116,8 +116,8 @@ export const joinWallet = [
       const userId = req.userId!;
       const walletId = req.params.id!;
 
-      const wallet = await walletService.getWalletById(walletId);
-      if (!wallet) return res.status(404).json({ error: "Wallet not found" });
+      const walletExists = await walletService.getWalletById(walletId);
+      if (!walletExists) return res.status(404).json({ error: "Wallet not found" });
 
       if (await isMember(walletId, userId))
         return res.status(400).json({ error: "Already a member" });

@@ -19,7 +19,8 @@ export async function cliRequest<T = any>(
   const config: AxiosRequestConfig = {
     method,
     url: `${baseURL}${path}`,
-    data: body,
+    // Only include data for non-GET requests and when body is not null/undefined
+    ...(method !== "get" && body !== null && body !== undefined ? { data: body } : {}),
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
