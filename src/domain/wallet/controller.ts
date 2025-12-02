@@ -89,7 +89,11 @@ export const inviteMember = [
 
       const member = await addMember(walletId, invitee.id, role || "member");
 
-      return res.status(201).json({ member });
+      // Fetch wallet details and balances to return enriched context
+      const wallet = await walletService.getWalletDetails(walletId);
+      const balances = await ledgerService.getWalletDisplayBalances(walletId);
+
+      return res.status(201).json({ wallet, balances, member });
     } catch (err: any) {
       if (err.name === "ZodError") {
         return res.status(400).json({ error: "Invalid request body", details: err.errors });
@@ -118,7 +122,11 @@ export const joinWallet = [
 
       const member = await addMember(walletId, userId, "member");
 
-      return res.status(201).json({ member });
+      // Fetch wallet details and balances to return enriched context
+      const wallet = await walletService.getWalletDetails(walletId);
+      const balances = await ledgerService.getWalletDisplayBalances(walletId);
+
+      return res.status(201).json({ wallet, balances, member });
     } catch (err: any) {
       return res.status(400).json({ error: err.message || "Failed to join wallet" });
     }
