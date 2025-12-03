@@ -12,6 +12,8 @@ import type {
   CreateCardResult,
   CreateCustomerParams,
   CreateCustomerResult,
+  InitiatePayoutParams,
+  InitiatePayoutResult,
 } from "../baasClient.js";
 import { createProspectPerson } from "./personService.js";
 import { getSyncteraClient } from "./syncteraClient.js";
@@ -180,5 +182,72 @@ export class SyncteraBaasClient implements BaasClient {
     const payload: any = { card_status: status };
     await client.patch(`/cards/${cardId}`, payload);
     Debugger.logInfo(`[SyncteraBaasClient] Updated card ${cardId} status -> ${status}`);
+  }
+
+  /**
+   * Initiate an instant card payout (PUSH) for Canadian users.
+   * Pushes funds from Synctera account to user's external debit card.
+   * 
+   * @param params - Payout parameters including account ID, amount, currency (CAD)
+   * @returns Result with transfer ID and status
+   */
+  async initiatePayout(params: InitiatePayoutParams): Promise<InitiatePayoutResult> {
+    const client = getSyncteraClient();
+
+    // Map InitiatePayoutParams to Synctera's external card transfer format
+    // NOTE: externalAccountId in our params refers to the SOURCE account (wallet pool)
+    // We need the external_card_id (destination card) which should be in metadata
+    const externalCardId = params.metadata?.externalCardId;
+    if (!externalCardId) {
+      throw new Error(
+        "[SyncteraBaasClient] initiatePayout requires metadata.externalCardId (destination card token)"
+      );
+    }
+
+    const payload: any = {
+      external_card_id: externalCardId,
+      originating_account_id: params.externalAccountId, // Source: wallet pool account
+      amount: params.amountMinor, // Amount in cents
+      currency: params.currency, // CAD for Canadian users
+      type: "PUSH", // PUSH = payout (send money TO external card)
+    };
+
+    // Add optional merchant descriptor if provided
+    if (params.metadata?.merchant) {
+      payload.merchant = params.metadata.merchant;
+    }
+
+    // Add optional reference/memo
+    if (params.reference) {
+      payload.merchant = payload.merchant || {};
+      payload.merchant.name = payload.merchant.name || `Withdrawal ${params.reference}`;
+    }
+
+    try {
+      const res = await client.post("/external_cards/transfers", payload);
+      const data = res.data;
+
+      Debugger.logInfo(
+        `[SyncteraBaasClient] Initiated PUSH payout ${data.id} for ${params.amountMinor} ${params.currency}`
+      );
+      Debugger.logJSON("[SyncteraBaasClient] Payout response", data);
+
+      return {
+        provider: this.provider,
+        externalTransferId: data.id,
+        status: data.status, // SUCCEEDED, PENDING, DECLINED, CANCELED, UNKNOWN
+        estimatedCompletionDate: data.created_time, // Instant payouts complete immediately
+      };
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const body = err?.response?.data;
+      Debugger.logError(
+        `[SyncteraBaasClient] PUSH payout failed: status=${status}, message=${err.message}`
+      );
+      if (body) {
+        Debugger.logJSON("[SyncteraBaasClient] Payout error body", body);
+      }
+      throw err;
+    }
   }
 }

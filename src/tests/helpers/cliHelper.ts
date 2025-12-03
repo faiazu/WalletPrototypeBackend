@@ -8,7 +8,7 @@ export function getBaseUrl(): string {
 }
 
 export async function cliRequest<T = any>(
-  method: "get" | "post" | "put" | "delete",
+  method: "get" | "post" | "put" | "patch" | "delete",
   path: string,
   body?: any,
   token?: string

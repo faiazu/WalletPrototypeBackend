@@ -192,6 +192,7 @@ export class BaasService {
     walletId: string,
     options?: { nickname?: string }
   ): Promise<{
+    id?: string;
     provider: BaasProviderName;
     externalCardId: string;
     last4?: string;
@@ -245,6 +246,7 @@ export class BaasService {
 
     if (existingCard) {
       return {
+        id: existingCard.id,
         provider: existingCard.providerName,
         externalCardId: existingCard.externalCardId,
         ...(existingCard.last4 && { last4: existingCard.last4 }),
@@ -254,7 +256,7 @@ export class BaasService {
     }
 
     // 5) Persist mapping in BaasCard, including walletId
-    await this.prisma.baasCard.create({
+    const newCard = await this.prisma.baasCard.create({
       data: {
         userId,
         walletId,
@@ -269,6 +271,7 @@ export class BaasService {
     });
 
     return {
+      id: newCard.id,
       provider: cardResult.provider,
       externalCardId: cardResult.externalCardId,
       ...(cardResult.last4 && { last4: cardResult.last4 }),
