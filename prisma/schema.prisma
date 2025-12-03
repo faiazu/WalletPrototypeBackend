@@ -118,11 +118,12 @@ model Card {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  wallet         Wallet          @relation(fields: [walletId], references: [id])
-  baasAccount    BaasAccount?
-  ledgerAccounts LedgerAccount[]
-  authHolds      CardAuthHold[]
-  archives       CardArchive[]
+  wallet             Wallet              @relation(fields: [walletId], references: [id])
+  baasAccount        BaasAccount?
+  ledgerAccounts     LedgerAccount[]
+  authHolds          CardAuthHold[]
+  archives           CardArchive[]
+  withdrawalRequests WithdrawalRequest[]
 }
 
 model LedgerAccount {
@@ -289,6 +290,7 @@ model WithdrawalRequest {
 
   wallet    Wallet               @relation(fields: [walletId], references: [id])
   user      User                 @relation(fields: [userId], references: [id])
+  card      Card                 @relation(fields: [cardId], references: [id])
   transfers WithdrawalTransfer[]
 
   @@index([walletId, status])

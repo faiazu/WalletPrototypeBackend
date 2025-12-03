@@ -320,27 +320,27 @@ export class BaasService {
       const account = await this.ensureAccountForCard(internalCard.id, userId, walletId);
 
       // 5) Ask provider to create the physical/virtual card
-      const cardResult: CreateCardResult = await this.client.createCard({
-        userId,
-        externalCustomerId,
-        externalAccountId: account.externalAccountId,
-        embossName: buildEmbossName(user?.name, user?.email),
-      } as CreateCardParams);
+    const cardResult: CreateCardResult = await this.client.createCard({
+      userId,
+      externalCustomerId,
+      externalAccountId: account.externalAccountId,
+      embossName: buildEmbossName(user?.name, user?.email),
+    } as CreateCardParams);
 
       // 6) Persist BaasCard mapping (links Synctera card to our internal card)
       const baasCard = await this.prisma.baasCard.create({
-        data: {
-          userId,
-          walletId,
-          baasCustomerId,
-          baasAccountId: account.id,
-          providerName: cardResult.provider,
-          externalCardId: cardResult.externalCardId,
-          last4: cardResult.last4 ?? null,
-          status: cardResult.status ?? "ACTIVE",
-          nickname: options?.nickname ?? null,
-        },
-      });
+      data: {
+        userId,
+        walletId,
+        baasCustomerId,
+        baasAccountId: account.id,
+        providerName: cardResult.provider,
+        externalCardId: cardResult.externalCardId,
+        last4: cardResult.last4 ?? null,
+        status: cardResult.status ?? "ACTIVE",
+        nickname: options?.nickname ?? null,
+      },
+    });
 
       // 7) Update internal Card with Synctera card ID
       await this.prisma.card.update({
@@ -357,14 +357,14 @@ export class BaasService {
         `✅ Card created: internal=${internalCard.id}, external=${cardResult.externalCardId}, account=${account.externalAccountId}`
       );
 
-      return {
+    return {
         id: baasCard.id,
-        provider: cardResult.provider,
-        externalCardId: cardResult.externalCardId,
-        ...(cardResult.last4 && { last4: cardResult.last4 }),
-        status: cardResult.status ?? "ACTIVE",
-        nickname: options?.nickname ?? null,
-      };
+      provider: cardResult.provider,
+      externalCardId: cardResult.externalCardId,
+      ...(cardResult.last4 && { last4: cardResult.last4 }),
+      status: cardResult.status ?? "ACTIVE",
+      nickname: options?.nickname ?? null,
+    };
     } catch (error) {
       // Rollback: delete the internal card if any step fails
       await this.prisma.card.delete({

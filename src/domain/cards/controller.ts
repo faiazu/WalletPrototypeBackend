@@ -59,9 +59,13 @@ async function resolveCardContext(cardId: string, userId: string): Promise<{
   customerId: string;
   cardHolderName?: string | null;
 }> {
+  // Accept either internal ID or externalCardId
   const card = await prisma.baasCard.findFirst({
     where: {
-      externalCardId: cardId,
+      OR: [
+        { id: cardId }, // Internal database ID
+        { externalCardId: cardId }, // Synctera's external ID
+      ],
       providerName: BaasProviderName.SYNCTERA,
     },
     include: {
@@ -132,7 +136,12 @@ export const getWidgetUrl = [
 
       // Wallet membership check
       const card = await prisma.baasCard.findFirst({
-        where: { externalCardId: cardId },
+        where: {
+          OR: [
+            { id: cardId },
+            { externalCardId: cardId },
+          ],
+        },
       });
       if (!card || !card.walletId) {
         return res.status(404).json({ error: "CardNotFound" });
@@ -188,7 +197,12 @@ export const postClientToken = [
       }
 
       const card = await prisma.baasCard.findFirst({
-        where: { externalCardId: cardId },
+        where: {
+          OR: [
+            { id: cardId },
+            { externalCardId: cardId },
+          ],
+        },
       });
       if (!card || !card.walletId) {
         return res.status(404).json({ error: "CardNotFound" });
@@ -237,7 +251,12 @@ export const postSingleUseToken = [
       }
 
       const card = await prisma.baasCard.findFirst({
-        where: { externalCardId: cardId },
+        where: {
+          OR: [
+            { id: cardId },
+            { externalCardId: cardId },
+          ],
+        },
       });
       if (!card || !card.walletId) {
         return res.status(404).json({ error: "CardNotFound" });
@@ -287,8 +306,14 @@ export const getCardDetails = [
         return res.status(400).json({ error: "CardIdRequired" });
       }
 
+      // Try to find by internal ID first, then fall back to externalCardId
       const baasCard = await prisma.baasCard.findFirst({
-        where: { externalCardId: cardId },
+        where: {
+          OR: [
+            { id: cardId }, // Internal database ID
+            { externalCardId: cardId }, // Synctera's external ID
+          ],
+        },
         include: {
           user: { select: { id: true, email: true, name: true } },
         },
@@ -300,11 +325,11 @@ export const getCardDetails = [
         return res.status(403).json({ error: "UserNotMemberOfWallet" });
       }
 
-      // Find the internal Card record
+      // Find the internal Card record using the external card ID
       const internalCard = await prisma.card.findFirst({
         where: {
           walletId: baasCard.walletId,
-          providerCardId: cardId,
+          providerCardId: baasCard.externalCardId,
         },
       });
 
@@ -382,7 +407,12 @@ export const updateCardStatus = [
       }
 
       const card = await prisma.baasCard.findFirst({
-        where: { externalCardId: cardId },
+        where: {
+          OR: [
+            { id: cardId },
+            { externalCardId: cardId },
+          ],
+        },
       });
       if (!card || !card.walletId) {
         return res.status(404).json({ error: "CardNotFound" });
@@ -416,7 +446,12 @@ export const updateCardNickname = [
       const { nickname } = updateCardNicknameSchema.parse(req.body ?? {});
 
       const card = await prisma.baasCard.findFirst({
-        where: { externalCardId: cardId },
+        where: {
+          OR: [
+            { id: cardId },
+            { externalCardId: cardId },
+          ],
+        },
       });
 
       if (!card || !card.walletId) {
@@ -469,7 +504,12 @@ export const terminateCard = [
       }
 
       const baasCard = await prisma.baasCard.findFirst({
-        where: { externalCardId: cardId },
+        where: {
+          OR: [
+            { id: cardId },
+            { externalCardId: cardId },
+          ],
+        },
       });
 
       if (!baasCard || !baasCard.walletId) {
