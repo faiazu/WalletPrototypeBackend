@@ -2,10 +2,10 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 
 import { authMiddleware } from "../../core/authMiddleware.js";
-import { withdrawalService } from "../../services/wallet/withdrawalService.js";
-import { ledgerService } from "../../services/ledger/ledgerService.js";
+import { withdrawalService } from "./withdrawalService.js";
+import { ledgerService } from "../ledger/service.js";
 import { baasService } from "../../core/dependencies.js";
-import { isMember } from "../../services/wallet/memberService.js";
+import { isMember } from "./memberService.js";
 
 /**
  * Request body schema for withdrawal creation (CARD-CENTRIC)

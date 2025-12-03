@@ -66,3 +66,4 @@ export const walletService = {
     return wallet.adminId === userId;
   },
 };
+

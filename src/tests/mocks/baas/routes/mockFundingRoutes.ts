@@ -31,7 +31,7 @@ router.post("/", async (req: Request, res: Response) => {
       providerAccountId,
       amountMinor,
       currency,
-      reference,
+      reference: reference ?? "",
       fundingMethod: "ACH_CREDIT",
       occurredAt: new Date(),
       rawPayload: { mock: true, triggeredViaTest: true },

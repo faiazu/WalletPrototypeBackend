@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { baasWebhookService } from "../../../../core/dependencies.js";
-import type { NormalizedPayoutStatusEvent } from "../../../../services/baas/baasTypes.js";
+import type { NormalizedWithdrawalStatusEvent } from "../../../../services/baas/baasTypes.js";
 import { BaasProviderName } from "../../../../generated/prisma/enums.js";
 
 const router = Router();
@@ -25,16 +25,13 @@ router.post("/", async (req: Request, res: Response) => {
     const { providerTransferId, status, failureReason, amountMinor, currency } =
       payoutStatusSchema.parse(req.body);
 
-    const event: NormalizedPayoutStatusEvent = {
+    const event: NormalizedWithdrawalStatusEvent = {
       provider: BaasProviderName.MOCK,
       type: "PAYOUT_STATUS",
       providerEventId: `mock_payout_status_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       providerTransferId,
       status,
-      failureReason,
-      amountMinor,
-      currency,
-      occurredAt: new Date(),
+      ...(failureReason && { failureReason }),
       rawPayload: { mock: true, triggeredViaTest: true },
     };
 

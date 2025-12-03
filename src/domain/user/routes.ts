@@ -2,7 +2,7 @@ import express from "express";
 
 import { authMiddleware } from "../../core/authMiddleware.js";
 import { prisma } from "../../core/db.js";
-import { withdrawalService } from "../../services/wallet/withdrawalService.js";
+import { withdrawalService } from "../wallet/withdrawalService.js";
 
 const router = express.Router();
 
@@ -117,10 +117,12 @@ router.get("/overview", authMiddleware, async (req, res) => {
 
   const cardCountMap = new Map<string, number>();
   for (const row of cardCounts) {
-    cardCountMap.set(row.walletId, row._count._all);
+    if (row.walletId) {
+      cardCountMap.set(row.walletId, row._count._all);
+    }
   }
 
-  const myCardWalletIds = new Set<string>(myWalletCards.map((c) => c.walletId));
+  const myCardWalletIds = new Set<string>(myWalletCards.map((c) => c.walletId).filter((id): id is string => id !== null));
 
   // Fetch recent withdrawal history for the user (last 10)
   const withdrawals = await withdrawalService.getWithdrawalsByUser(userId, {
@@ -165,7 +167,7 @@ router.get("/overview", authMiddleware, async (req, res) => {
     recentWithdrawals: withdrawals.map((w) => ({
       id: w.id,
       walletId: w.walletId,
-      walletName: w.wallet?.name,
+      walletName: null, // wallet relation not included in overview
       amountMinor: w.amountMinor,
       currency: w.currency,
       status: w.status,

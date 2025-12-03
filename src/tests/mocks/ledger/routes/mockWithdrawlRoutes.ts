@@ -1,9 +1,9 @@
 import express from "express";
 import { z } from "zod";
 
-import { ledgerService } from "../../../../services/ledger/ledgerService.js";
-import { walletService } from "../../../../services/wallet/walletService.js";
-import { isMember } from "../../../../services/wallet/memberService.js";
+import { ledgerService } from "../../../../domain/ledger/service.js";
+import { walletService } from "../../../../domain/wallet/service.js";
+import { isMember } from "../../../../domain/wallet/memberService.js";
 import { authMiddleware } from "../../../../core/authMiddleware.js";
 
 const router = express.Router();

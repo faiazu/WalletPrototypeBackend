@@ -1,6 +1,6 @@
 // script to inspect all the accounts of a ledger of a wallet via the inspect ledger service
 
-import { ledgerService } from "../../../services/ledger/ledgerService.js";
+import { ledgerService } from "../../../domain/ledger/service.js";
 
 /**
  * Dumps all ledger accounts for a wallet.

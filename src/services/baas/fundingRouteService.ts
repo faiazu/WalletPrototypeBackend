@@ -40,7 +40,7 @@ export const fundingRouteService = {
       update: {
         walletId,
         userId,
-        baasAccountId,
+        ...(baasAccountId !== undefined && { baasAccountId }),
       },
       create: {
         providerName,
@@ -48,7 +48,7 @@ export const fundingRouteService = {
         reference: normalizedReference,
         walletId,
         userId,
-        baasAccountId,
+        ...(baasAccountId !== undefined && { baasAccountId }),
       },
     });
   },
@@ -157,7 +157,7 @@ export const fundingRouteService = {
     providerAccountId: string;
     reference?: string | null;
   }): Promise<boolean> {
-    const route = await this.findRoute({ providerName, providerAccountId, reference });
+    const route = await this.findRoute({ providerName, providerAccountId, reference: reference ?? null });
     return route !== null;
   },
 };

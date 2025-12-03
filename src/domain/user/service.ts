@@ -3,7 +3,7 @@ import type { User } from "../../generated/prisma/client.js";
 import {
   deactivateSyncteraPersonForUser,
   linkUserToSynctera,
-} from "../baas/synctera/userSyncteraService.js";
+} from "../../services/baas/synctera/userSyncteraService.js";
 
 export async function getUserById(id: string): Promise<User | null> {
   return prisma.user.findUnique({ where: { id } });
@@ -68,3 +68,4 @@ export async function deactivateUser(userId: string): Promise<User> {
 
   return updated;
 }
+

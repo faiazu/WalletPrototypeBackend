@@ -27,3 +27,7 @@ export const adjustmentSchema = z.object({
 export const walletParamSchema = z.object({
   walletId: z.string().min(1),
 });
+
+export const cardParamSchema = z.object({
+  cardId: z.string().min(1),
+});

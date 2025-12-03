@@ -59,3 +59,4 @@ export async function signInWithGoogle(idToken: string) {
     token,
   };
 }
+

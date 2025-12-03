@@ -2,6 +2,19 @@ import { prisma } from "../../core/db.js";
 import type { LedgerAccount } from "../../generated/prisma/client.js";
 import { LedgerScope } from "../../generated/prisma/client.js";
 import { postingEngine } from "./postingEngine.js";
+import type {
+  CardDepositInput,
+  CardCaptureInput,
+  CardWithdrawalInput,
+  CardPendingWithdrawalInput,
+  CardFinalizeWithdrawalInput,
+  CardReverseWithdrawalInput,
+  CardDisplayBalances,
+  AggregatedWalletBalances,
+  CardReconciliation,
+} from "./types.js";
+
+export type LedgerService = typeof ledgerService;
 
 export const ledgerService = {
 
@@ -150,6 +163,109 @@ export const ledgerService = {
     return prisma.ledgerAccount.findMany({
       where: { cardId }
     });
+  },
+
+  /**
+   * Get card display balances (human-friendly)
+   * Pool is stored as liability (negative), so we negate for display
+   * Member equity is already positive
+   * Pending withdrawals are shown as liability (positive)
+   */
+  async getCardDisplayBalances(cardId: string): Promise<CardDisplayBalances> {
+    const pool = await this.getCardPoolAccount(cardId);
+    const equityAccounts = await prisma.ledgerAccount.findMany({
+      where: {
+        cardId,
+        ledgerScope: LedgerScope.CARD_MEMBER_EQUITY,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    // Pending withdrawal account may not exist yet
+    const pendingAccount = await prisma.ledgerAccount.findFirst({
+      where: {
+        cardId,
+        ledgerScope: LedgerScope.CARD_PENDING_WITHDRAWAL,
+      },
+    });
+
+    return {
+      cardId,
+      poolDisplay: -pool.balance,
+      memberEquity: equityAccounts.map((acc) => ({
+        userId: acc.userId!,
+        balance: acc.balance,
+      })),
+      pendingWithdrawals: pendingAccount ? pendingAccount.balance : 0,
+    };
+  },
+
+  /**
+   * Get aggregated wallet balances from all cards
+   */
+  async getAggregatedWalletBalances(walletId: string): Promise<AggregatedWalletBalances> {
+    // Get all cards for this wallet
+    const cards = await prisma.card.findMany({
+      where: { walletId },
+      select: { id: true },
+    });
+
+    const cardBreakdown: CardDisplayBalances[] = [];
+    const userEquityMap = new Map<string, number>();
+    let totalPool = 0;
+    let totalPending = 0;
+
+    for (const card of cards) {
+      const cardBalances = await this.getCardDisplayBalances(card.id);
+      cardBreakdown.push(cardBalances);
+
+      totalPool += cardBalances.poolDisplay;
+      totalPending += cardBalances.pendingWithdrawals;
+
+      // Aggregate user equity across all cards
+      for (const equity of cardBalances.memberEquity) {
+        const current = userEquityMap.get(equity.userId) || 0;
+        userEquityMap.set(equity.userId, current + equity.balance);
+      }
+    }
+
+    return {
+      walletId,
+      totalPoolDisplay: totalPool,
+      totalMemberEquity: Array.from(userEquityMap.entries()).map(([userId, balance]) => ({
+        userId,
+        balance,
+      })),
+      totalPendingWithdrawals: totalPending,
+      cardBreakdown,
+    };
+  },
+
+  /**
+   * Get card reconciliation (verify ledger consistency)
+   * Pool balance should equal sum of member equity + pending withdrawals
+   */
+  async getCardReconciliation(cardId: string): Promise<CardReconciliation> {
+    const displayBalances = await this.getCardDisplayBalances(cardId);
+    
+    const sumOfMemberEquity = displayBalances.memberEquity.reduce(
+      (sum, equity) => sum + equity.balance,
+      0
+    );
+
+    // For consistency: poolDisplay should equal sumOfMemberEquity + pendingWithdrawals
+    const consistent =
+      Math.abs(displayBalances.poolDisplay - (sumOfMemberEquity + displayBalances.pendingWithdrawals)) < 0.01;
+
+    return {
+      cardId: displayBalances.cardId,
+      poolBalance: displayBalances.poolDisplay,
+      memberEquity: displayBalances.memberEquity,
+      sumOfMemberEquity,
+      pendingWithdrawals: displayBalances.pendingWithdrawals,
+      consistent,
+      timestamp: new Date(),
+    };
   },
 
   /**
@@ -453,19 +569,8 @@ export const ledgerService = {
    * Debit: card_pool
    * Credit: card_member_equity[user]
    */
-  async postCardDeposit({
-    transactionId,
-    cardId,
-    userId,
-    amount,
-    metadata
-  }: {
-    transactionId: string,
-    cardId: string,
-    userId: string,
-    amount: number,
-    metadata?: any
-  }) {
+  async postCardDeposit(input: CardDepositInput) {
+    const { transactionId, cardId, userId, amount, metadata } = input;
     const pool = await this.getCardPoolAccount(cardId);
     const member = await this.getCardMemberEquityAccount(cardId, userId);
 
@@ -491,19 +596,8 @@ export const ledgerService = {
    * Debit: card_member_equity[user]
    * Credit: card_pool
    */
-  async postCardWithdrawal({
-    transactionId,
-    cardId,
-    userId,
-    amount,
-    metadata
-  }: {
-    transactionId: string,
-    cardId: string,
-    userId: string,
-    amount: number,
-    metadata?: any
-  }) {
+  async postCardWithdrawal(input: CardWithdrawalInput) {
+    const { transactionId, cardId, userId, amount, metadata } = input;
     const pool = await this.getCardPoolAccount(cardId);
     const member = await this.getCardMemberEquityAccount(cardId, userId);
 
@@ -534,19 +628,8 @@ export const ledgerService = {
    * Debit: card_member_equity[user]
    * Credit: card_pending_withdrawal
    */
-  async postPendingCardWithdrawal({
-    transactionId,
-    cardId,
-    userId,
-    amount,
-    metadata
-  }: {
-    transactionId: string,
-    cardId: string,
-    userId: string,
-    amount: number,
-    metadata?: any
-  }) {
+  async postPendingCardWithdrawal(input: CardPendingWithdrawalInput) {
+    const { transactionId, cardId, userId, amount, metadata } = input;
     const member = await this.getCardMemberEquityAccount(cardId, userId);
     const pending = await this.getCardPendingWithdrawalAccount(cardId);
 
@@ -577,17 +660,8 @@ export const ledgerService = {
    * Debit: card_pending_withdrawal
    * Credit: card_pool
    */
-  async finalizeCardWithdrawal({
-    transactionId,
-    cardId,
-    amount,
-    metadata
-  }: {
-    transactionId: string,
-    cardId: string,
-    amount: number,
-    metadata?: any
-  }) {
+  async finalizeCardWithdrawal(input: Omit<CardFinalizeWithdrawalInput, "userId">) {
+    const { transactionId, cardId, amount, metadata } = input;
     const pool = await this.getCardPoolAccount(cardId);
     const pending = await this.getCardPendingWithdrawalAccount(cardId);
 
@@ -618,19 +692,8 @@ export const ledgerService = {
    * Debit: card_pending_withdrawal
    * Credit: card_member_equity[user]
    */
-  async reversePendingCardWithdrawal({
-    transactionId,
-    cardId,
-    userId,
-    amount,
-    metadata
-  }: {
-    transactionId: string,
-    cardId: string,
-    userId: string,
-    amount: number,
-    metadata?: any
-  }) {
+  async reversePendingCardWithdrawal(input: CardReverseWithdrawalInput) {
+    const { transactionId, cardId, userId, amount, metadata } = input;
     const member = await this.getCardMemberEquityAccount(cardId, userId);
     const pending = await this.getCardPendingWithdrawalAccount(cardId);
 
@@ -661,17 +724,8 @@ export const ledgerService = {
    *   Debit: card_member_equity[user]
    *   Credit: card_pool
    */
-  async postCardCaptureNew({
-    transactionId,
-    cardId,
-    splits,
-    metadata,
-  }: {
-    transactionId: string;
-    cardId: string;
-    splits: Array<{ userId: string; amount: number }>;
-    metadata?: any;
-  }) {
+  async postCardCaptureNew(input: CardCaptureInput) {
+    const { transactionId, cardId, splits, metadata } = input;
     const pool = await this.getCardPoolAccount(cardId);
 
     const entries: Array<{
@@ -780,3 +834,4 @@ export const ledgerService = {
     });
   }
 };
+

@@ -12,8 +12,8 @@ import {
   updateCardNicknameSchema,
   widgetQuerySchema,
 } from "./validator.js";
-import { isMember } from "../../services/wallet/memberService.js";
-import { ledgerService } from "../../services/ledger/ledgerService.js";
+import { isMember } from "../wallet/memberService.js";
+import { ledgerService } from "../ledger/service.js";
 import { LedgerScope } from "../../generated/prisma/enums.js";
 
 /**
@@ -30,7 +30,7 @@ export const issueCard = [
 
       const { walletId } = issueCardParamsSchema.parse({ walletId: req.params.walletId });
       const { nickname } = issueCardBodySchema.parse(req.body ?? {});
-      const card = await baasService.createCardForUser(userId, walletId, { nickname });
+      const card = await baasService.createCardForUser(userId, walletId, nickname ? { nickname } : {});
 
       return res.status(201).json(card);
     } catch (err: any) {
@@ -88,7 +88,6 @@ async function resolveCardContext(cardId: string, userId: string): Promise<{
     ? await prisma.baasAccount.findUnique({ where: { id: card.baasAccountId } })
     : await prisma.baasAccount.findFirst({
         where: {
-          walletId: card.walletId,
           userId: card.userId,
           providerName: BaasProviderName.SYNCTERA,
         },
@@ -111,13 +110,19 @@ async function resolveCardContext(cardId: string, userId: string): Promise<{
     throw new Error("CustomerNotFound");
   }
 
+  // Fetch user for cardholder name if needed
+  const user = await prisma.user.findUnique({
+    where: { id: card.userId },
+    select: { name: true },
+  });
+
   return {
     baasCardId: card.id,
     externalCardId: card.externalCardId,
     walletId: card.walletId,
     accountId: account.externalAccountId,
     customerId: customer.externalCustomerId,
-    cardHolderName: card.user?.name ?? null,
+    cardHolderName: user?.name ?? null,
   };
 }
 
@@ -596,7 +601,7 @@ export const terminateCard = [
           cardId: internalCard.id,
           walletId: baasCard.walletId,
           userId: baasCard.userId,
-          externalAccountId: baasCard.baasAccount?.externalAccountId,
+          externalAccountId: null, // BaasAccount relation not included in this query
           externalCardId: baasCard.externalCardId,
           balanceSnapshot,
           terminatedAt: new Date(),

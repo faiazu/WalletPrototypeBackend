@@ -12,7 +12,7 @@
 
 import { cliRequest } from "../../helpers/cliHelper.js";
 import type { LedgerAccount } from "../../../generated/prisma/client.js";
-import { ledgerService } from "../../../services/ledger/ledgerService.js";
+import { ledgerService } from "../../../domain/ledger/service.js";
 
 const admin = { email: "admin@example.com", name: "Admin User" };
 const member = { email: "member@example.com", name: "Member User" };

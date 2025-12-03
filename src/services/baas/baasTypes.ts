@@ -125,6 +125,20 @@ export interface NormalizedWalletFundingEvent {
 }
 
 /**
+ * Normalized shape for withdrawal/payout status updates from provider.
+ */
+export interface NormalizedWithdrawalStatusEvent {
+  provider: BaasProviderName;
+  type: "PAYOUT_STATUS";
+
+  providerEventId: string;
+  providerTransferId: string;
+  status: string; // "COMPLETED", "FAILED", etc.
+  failureReason?: string;
+  rawPayload: unknown;
+}
+
+/**
  * Unified union of all normalized events that BaasWebhookService can handle.
  */
 export type NormalizedBaasEvent =
@@ -132,7 +146,7 @@ export type NormalizedBaasEvent =
   | NormalizedCardAuthReversalEvent
   | NormalizedCardClearingEvent
   | NormalizedWalletFundingEvent
-  | NormalizedPayoutStatusEvent
+  | NormalizedWithdrawalStatusEvent
   | NormalizedKycVerificationEvent
   | NormalizedAccountStatusEvent
   | NormalizedCardStatusEvent;

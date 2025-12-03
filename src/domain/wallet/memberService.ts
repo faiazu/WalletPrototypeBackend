@@ -37,3 +37,4 @@ export async function addMember(walletId: string, userId: string, role: string =
     return member;
   });
 }
+

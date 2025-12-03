@@ -2,13 +2,13 @@ import type { Request, Response } from "express";
 
 import { authMiddleware } from "../../core/authMiddleware.js";
 import { prisma } from "../../core/db.js";
-import { addMember, isMember } from "../../services/wallet/memberService.js";
-import { requireUserByEmail } from "../../services/user/userService.js";
-import { walletService } from "../../services/wallet/walletService.js";
+import { addMember, isMember } from "./memberService.js";
+import { requireUserByEmail } from "../user/service.js";
+import { walletService } from "./service.js";
 import { createWalletSchema, inviteSchema, createFundingRouteSchema, updateSpendPolicySchema } from "./validator.js";
 import { fundingRouteService } from "../../services/baas/fundingRouteService.js";
-import { ledgerService } from "../../services/ledger/ledgerService.js";
-import { splittingPolicyService } from "../../services/wallet/splittingPolicyService.js";
+import { ledgerService } from "../ledger/service.js";
+import { splittingPolicyService } from "./splittingPolicyService.js";
 
 /**
  * Controller for creating a wallet.
@@ -223,10 +223,10 @@ export const createFundingRoute = [
       const route = await fundingRouteService.upsertRoute({
         providerName,
         providerAccountId,
-        reference,
+        reference: reference ?? null,
         walletId,
         userId: routeUserId,
-        baasAccountId,
+        baasAccountId: baasAccountId ?? null,
       });
 
       return res.status(201).json({ route });

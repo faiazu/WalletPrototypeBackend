@@ -2,8 +2,8 @@ import type { Request, Response } from "express";
 
 import { prisma } from "../../core/db.js";
 import { signAccessToken } from "../../core/jwt.js";
-import { signInWithGoogle } from "../../services/auth/googleAuthService.js";
-import { ensureUserByEmail } from "../../services/user/userService.js";
+import { signInWithGoogle } from "./googleAuthService.js";
+import { ensureUserByEmail } from "../user/service.js";
 import { debugLoginSchema, googleLoginSchema } from "./validator.js";
 import { completeUserKyc } from "../../services/baas/synctera/kycOnboardingService.js";
 

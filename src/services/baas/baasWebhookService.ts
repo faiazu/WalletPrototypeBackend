@@ -13,7 +13,7 @@ import type {
   NormalizedCardAuthReversalEvent,
   NormalizedCardClearingEvent,
   NormalizedWalletFundingEvent,
-  NormalizedPayoutStatusEvent,
+  NormalizedWithdrawalStatusEvent,
   NormalizedKycVerificationEvent,
   NormalizedAccountStatusEvent,
   NormalizedCardStatusEvent,
@@ -22,8 +22,8 @@ import { logger } from "../../core/logger.js";
 import { webhookCounter, webhookLatency } from "../../core/metrics.js";
 
 import { fundingRouteService } from "./fundingRouteService.js";
-import { withdrawalService } from "../wallet/withdrawalService.js";
-import { ledgerService } from "../ledger/ledgerService.js";
+import { withdrawalService } from "../../domain/wallet/withdrawalService.js";
+import { ledgerService } from "../../domain/ledger/service.js";
 
 import type { CardProgramService, CardAuthDecision } from "./cardProgramService.js";
 
@@ -180,7 +180,7 @@ export class BaasWebhookService {
     }
 
     if (event.type === "PAYOUT_STATUS") {
-      await this.handlePayoutStatus(event as NormalizedPayoutStatusEvent);
+      await this.handlePayoutStatus(event as NormalizedWithdrawalStatusEvent);
       await this.markEventProcessed(providerName, event.providerEventId);
       return;
     }
@@ -434,7 +434,7 @@ export class BaasWebhookService {
     const route = await fundingRouteService.findRoute({
       providerName: event.provider,
       providerAccountId: event.providerAccountId,
-      reference: event.reference,
+      reference: event.reference ?? null,
     });
 
     if (route) {
@@ -527,7 +527,7 @@ export class BaasWebhookService {
    * 
    * Completes or reverses pending withdrawals based on provider confirmation
    */
-  private async handlePayoutStatus(event: NormalizedPayoutStatusEvent): Promise<void> {
+  private async handlePayoutStatus(event: NormalizedWithdrawalStatusEvent): Promise<void> {
     // Find withdrawal transfer by provider ID
     const transfer = await withdrawalService.findTransferByProviderId(
       event.provider,
@@ -547,7 +547,18 @@ export class BaasWebhookService {
       return;
     }
 
-    const request = transfer.withdrawalRequest;
+    // Fetch the withdrawal request separately
+    const request = await this.prisma.withdrawalRequest.findUnique({
+      where: { id: transfer.withdrawalRequestId },
+    });
+
+    if (!request) {
+      logger.error(
+        { transferId: transfer.id, event: "payout_status" },
+        "Withdrawal request not found for transfer"
+      );
+      return;
+    }
 
     try {
       if (event.status === "COMPLETED") {
@@ -563,7 +574,7 @@ export class BaasWebhookService {
           metadata: {
             withdrawalRequestId: request.id,
             providerTransferId: event.providerTransferId,
-            completedAt: event.occurredAt,
+            completedAt: new Date(),
           },
         });
 
@@ -596,7 +607,7 @@ export class BaasWebhookService {
             withdrawalRequestId: request.id,
             providerTransferId: event.providerTransferId,
             failureReason: event.failureReason,
-            failedAt: event.occurredAt,
+            failedAt: new Date(),
           },
         });
 

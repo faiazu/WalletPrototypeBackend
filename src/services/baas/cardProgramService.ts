@@ -12,7 +12,7 @@ import type {
 } from "./baasTypes.js";
 
 import { AuthHoldStatus } from "../../generated/prisma/enums.js";
-import type { SplittingPolicyService } from "../wallet/splittingPolicyService.js";
+import type { SplittingPolicyService } from "../../domain/wallet/splittingPolicyService.js";
 import { logger } from "../../core/logger.js";
 import { cardAuthCounter, cardClearingCounter } from "../../core/metrics.js";
 
@@ -21,18 +21,15 @@ import { cardAuthCounter, cardClearingCounter } from "../../core/metrics.js";
  */
 export type CardAuthDecision = "APPROVE" | "DECLINE";
 
+import type { CardCaptureInput } from "../../domain/ledger/types.js";
+
 /**
  * Interface describing what the card program needs from the ledger.
  * We adapt your existing ledgerService to this.
  */
 export interface LedgerServiceForCardProgram {
   getCardPoolAccount(cardId: string): Promise<{ balance: number }>;
-  postCardCaptureNew(input: {
-    transactionId: string;
-    cardId: string;
-    splits: Array<{ userId: string; amount: number }>;
-    metadata?: any;
-  }): Promise<any>;
+  postCardCaptureNew(input: CardCaptureInput): Promise<any>;
 }
 
 /**
@@ -166,7 +163,8 @@ export class CardProgramService {
     // Note: pool is stored as a liability (negative when funded), so negate it for available
     const cardPoolAccount = await this.ledger.getCardPoolAccount(internalCard.id);
     const pendingHolds = await this.getPendingHoldTotal(internalCard.id);
-    const available = -cardPoolAccount.balance - pendingHolds;
+    const cardPoolBalance = cardPoolAccount.balance;
+    const available = -cardPoolBalance - pendingHolds;
     const payingUserId = card.userId;
 
     if (available < event.amountMinor) {
@@ -174,7 +172,7 @@ export class CardProgramService {
         {
           walletId,
           cardId: internalCard.id,
-          poolBalance: walletPoolBalance,
+          poolBalance: cardPoolBalance,
           pendingHolds,
           available,
           requested: event.amountMinor,

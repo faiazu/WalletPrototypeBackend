@@ -1,15 +1,240 @@
 import type { Request, Response } from "express";
 
 import { authMiddleware } from "../../core/authMiddleware.js";
-import { ledgerService } from "../../services/ledger/ledgerService.js";
-import { LedgerReconciliationService } from "../../services/ledger/ledgerReconciliation.js";
-import { isMember } from "../../services/wallet/memberService.js";
+import { ledgerService } from "./service.js";
+import { LedgerReconciliationService } from "./ledgerReconciliation.js";
+import { isMember } from "../wallet/memberService.js";
+import { prisma } from "../../core/db.js";
 import {
   adjustmentSchema,
   amountSchema,
   cardCaptureSchema,
   walletParamSchema,
+  cardParamSchema,
 } from "./validator.js";
+
+/**
+ * Helper: Validate card membership through the card's wallet
+ */
+async function isCardMember(cardId: string, userId: string): Promise<boolean> {
+  const card = await prisma.card.findUnique({
+    where: { id: cardId },
+    select: { walletId: true },
+  });
+  
+  if (!card || !card.walletId) {
+    return false;
+  }
+  
+  return isMember(card.walletId, userId);
+}
+
+/**
+ * Helper: Convert cents to dollars for iOS client
+ */
+const centsToDollars = (cents: number): number => cents / 100;
+
+// ============================================
+// CARD-CENTRIC ENDPOINTS (NEW)
+// ============================================
+
+/**
+ * POST /cards/:cardId/deposit
+ * Card-scoped deposit endpoint
+ */
+export const postCardDeposit = [
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const { cardId } = cardParamSchema.parse(req.params);
+
+      // Validate card membership through wallet
+      if (!(await isCardMember(cardId, userId))) {
+        return res.status(403).json({ error: "Not a card member" });
+      }
+
+      const { amount, metadata } = amountSchema.parse(req.body);
+      const transactionId = `card_deposit_${cardId}_${userId}_${Date.now()}`;
+
+      await ledgerService.postCardDeposit({
+        transactionId,
+        cardId,
+        userId,
+        amount,
+        metadata,
+      });
+
+      // Get card-specific balances
+      const cardBalances = await ledgerService.getCardDisplayBalances(cardId);
+      const reconciliation = await ledgerService.getCardReconciliation(cardId);
+
+      const ledgerState = {
+        cardId,
+        poolBalance: centsToDollars(cardBalances.poolDisplay),
+        memberEquity: cardBalances.memberEquity.map(m => ({
+          userId: m.userId,
+          balance: centsToDollars(m.balance)
+        })),
+        pendingWithdrawals: centsToDollars(cardBalances.pendingWithdrawals),
+        consistent: reconciliation.consistent,
+        sumOfMemberEquity: centsToDollars(reconciliation.sumOfMemberEquity)
+      };
+
+      return res.status(201).json({ transactionId, ledger: ledgerState });
+    } catch (err: any) {
+      if (err instanceof Error && "issues" in err) {
+        return res.status(400).json({ error: "Invalid input", details: (err as any).issues });
+      }
+      return res.status(400).json({ error: err.message || "Deposit failed" });
+    }
+  },
+];
+
+/**
+ * POST /cards/:cardId/withdraw
+ * Card-scoped withdrawal endpoint (immediate, for legacy support)
+ */
+export const postCardWithdraw = [
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const { cardId } = cardParamSchema.parse(req.params);
+
+      if (!(await isCardMember(cardId, userId))) {
+        return res.status(403).json({ error: "Not a card member" });
+      }
+
+      const { amount, metadata } = amountSchema.parse(req.body);
+      const transactionId = `card_withdraw_${cardId}_${userId}_${Date.now()}`;
+
+      await ledgerService.postCardWithdrawal({
+        transactionId,
+        cardId,
+        userId,
+        amount,
+        metadata,
+      });
+
+      const cardBalances = await ledgerService.getCardDisplayBalances(cardId);
+      const reconciliation = await ledgerService.getCardReconciliation(cardId);
+
+      const ledgerState = {
+        cardId,
+        poolBalance: centsToDollars(cardBalances.poolDisplay),
+        memberEquity: cardBalances.memberEquity.map(m => ({
+          userId: m.userId,
+          balance: centsToDollars(m.balance)
+        })),
+        pendingWithdrawals: centsToDollars(cardBalances.pendingWithdrawals),
+        consistent: reconciliation.consistent,
+        sumOfMemberEquity: centsToDollars(reconciliation.sumOfMemberEquity)
+      };
+
+      return res.status(201).json({ transactionId, ledger: ledgerState });
+    } catch (err: any) {
+      if (err instanceof Error && "issues" in err) {
+        return res.status(400).json({ error: "Invalid input", details: (err as any).issues });
+      }
+      return res.status(400).json({ error: err.message || "Withdraw failed" });
+    }
+  },
+];
+
+/**
+ * POST /cards/:cardId/capture
+ * Card-scoped capture endpoint (for purchases with splits)
+ */
+export const postCardCaptureNew = [
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const { cardId } = cardParamSchema.parse(req.params);
+
+      if (!(await isCardMember(cardId, userId))) {
+        return res.status(403).json({ error: "Not a card member" });
+      }
+
+      const { splits, metadata } = cardCaptureSchema.parse(req.body);
+      const transactionId = `card_capture_${cardId}_${Date.now()}`;
+
+      await ledgerService.postCardCaptureNew({
+        transactionId,
+        cardId,
+        splits,
+        metadata,
+      });
+
+      const cardBalances = await ledgerService.getCardDisplayBalances(cardId);
+      const reconciliation = await ledgerService.getCardReconciliation(cardId);
+
+      const ledgerState = {
+        cardId,
+        poolBalance: centsToDollars(cardBalances.poolDisplay),
+        memberEquity: cardBalances.memberEquity.map(m => ({
+          userId: m.userId,
+          balance: centsToDollars(m.balance)
+        })),
+        pendingWithdrawals: centsToDollars(cardBalances.pendingWithdrawals),
+        consistent: reconciliation.consistent,
+        sumOfMemberEquity: centsToDollars(reconciliation.sumOfMemberEquity)
+      };
+
+      return res.status(201).json({ transactionId, ledger: ledgerState });
+    } catch (err: any) {
+      if (err instanceof Error && "issues" in err) {
+        return res.status(400).json({ error: "Invalid input", details: (err as any).issues });
+      }
+      return res.status(400).json({ error: err.message || "Card capture failed" });
+    }
+  },
+];
+
+/**
+ * GET /cards/:cardId/reconciliation
+ * Card-scoped reconciliation endpoint
+ */
+export const getCardReconciliation = [
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const { cardId } = cardParamSchema.parse(req.params);
+
+      if (!(await isCardMember(cardId, userId))) {
+        return res.status(403).json({ error: "Not a card member" });
+      }
+
+      const reconciliation = await ledgerService.getCardReconciliation(cardId);
+
+      const response = {
+        cardId: reconciliation.cardId,
+        poolBalance: centsToDollars(reconciliation.poolBalance),
+        memberEquity: reconciliation.memberEquity.map(m => ({
+          userId: m.userId,
+          balance: centsToDollars(m.balance)
+        })),
+        pendingWithdrawals: centsToDollars(reconciliation.pendingWithdrawals),
+        sumOfMemberEquity: centsToDollars(reconciliation.sumOfMemberEquity),
+        consistent: reconciliation.consistent,
+        timestamp: reconciliation.timestamp.toISOString()
+      };
+
+      return res.json(response);
+    } catch (err: any) {
+      if (err instanceof Error && "issues" in err) {
+        return res.status(400).json({ error: "Invalid cardId" });
+      }
+      return res.status(400).json({ error: err.message || "Reconciliation failed" });
+    }
+  },
+];
+
+// ============================================
+// LEGACY WALLET-CENTRIC ENDPOINTS (DEPRECATED)
+// ============================================
 
 export const postDeposit = [
   authMiddleware,

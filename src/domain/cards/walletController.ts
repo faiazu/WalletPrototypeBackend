@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 
 import { prisma } from "../../core/db.js";
-import { isMember } from "../../services/wallet/memberService.js";
+import { isMember } from "../wallet/memberService.js";
 
 export const listWalletCards = async (req: Request, res: Response) => {
   try {

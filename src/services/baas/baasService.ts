@@ -117,12 +117,7 @@ export class BaasService {
     });
 
     if (existing) {
-      if (walletId && !existing.walletId) {
-        return this.prisma.baasAccount.update({
-          where: { id: existing.id },
-          data: { walletId },
-        });
-      }
+      // BaasAccount no longer has walletId in the schema (card-centric)
       return existing;
     }
 
@@ -133,10 +128,12 @@ export class BaasService {
       externalCustomerId,
     });
 
+    // Note: cardId is required in schema but can't be set here since account is created before card
+    // This is a temporary workaround - ideally account should be created as part of card creation
     const account = await this.prisma.baasAccount.create({
       data: {
         userId,
-        walletId: walletId ?? null,
+        cardId: "PLACEHOLDER", // Will be updated when card is created
         baasCustomerId,
         providerName: provider,
         externalAccountId: accountResult.externalAccountId,
@@ -282,7 +279,7 @@ export class BaasService {
     status?: string;
     nickname?: string | null;
   }> {
-    const { initializeLedgerForCard } = await import("../ledger/initLedger.js");
+    const { initializeLedgerForCard } = await import("../../domain/ledger/initLedger.js");
 
     // 1) Ensure user exists + belongs to this wallet
     const walletMember = await this.prisma.walletMember.findFirst({
@@ -427,7 +424,7 @@ export class BaasService {
       externalAccountId: account.externalAccountId,
       amountMinor,
       currency,
-      reference,
+      reference: reference ?? "",
       metadata: {
         ...metadata,
         walletId,

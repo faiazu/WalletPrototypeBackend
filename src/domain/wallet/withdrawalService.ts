@@ -1,9 +1,12 @@
 import { prisma } from "../../core/db.js";
-import type { WithdrawalRequest, WithdrawalTransfer } from "@prisma/client";
-import { WithdrawalRequestStatus, WithdrawalTransferStatus } from "../../generated/prisma/client.js";
+import { PrismaClient } from "../../generated/prisma/client.js";
+import type { WithdrawalRequest, WithdrawalTransfer } from "../../generated/prisma/client.js";
+import { WithdrawalRequestStatus, WithdrawalTransferStatus, BaasProviderName } from "../../generated/prisma/client.js";
 import { isMember } from "./memberService.js";
-import type { BaasService } from "../baas/baasService.js";
-import type { LedgerService } from "../ledger/ledgerService.js";
+import type { BaasService } from "../../services/baas/baasService.js";
+import type { ledgerService as LedgerServiceType } from "../ledger/service.js";
+
+type LedgerService = typeof LedgerServiceType;
 
 /**
  * WithdrawalService
@@ -46,7 +49,7 @@ export class WithdrawalService {
     amountMinor: number;
     currency?: string;
     metadata?: any;
-    ledgerService: typeof import("../ledger/ledgerService.js").ledgerService;
+    ledgerService: LedgerService;
   }): Promise<WithdrawalRequest> {
     // Validate user is wallet member
     if (!(await isMember(walletId, userId))) {
@@ -235,8 +238,8 @@ export class WithdrawalService {
         transfers: true,
       },
       orderBy: { createdAt: "desc" },
-      take: options?.limit,
-      skip: options?.offset,
+      ...(options?.limit !== undefined && { take: options.limit }),
+      ...(options?.offset !== undefined && { skip: options.offset }),
     });
   }
 
@@ -261,8 +264,8 @@ export class WithdrawalService {
         transfers: true,
       },
       orderBy: { createdAt: "desc" },
-      take: options?.limit,
-      skip: options?.offset,
+      ...(options?.limit !== undefined && { take: options.limit }),
+      ...(options?.offset !== undefined && { skip: options.offset }),
     });
   }
 
@@ -334,7 +337,7 @@ export class WithdrawalService {
     currency?: string;
     metadata?: any;
     baasService: BaasService;
-    ledgerService: typeof import("../ledger/ledgerService.js").ledgerService;
+    ledgerService: LedgerService;
   }): Promise<{ request: WithdrawalRequest; transfer: WithdrawalTransfer }> {
     // Step 1: Create withdrawal request
     const request = await this.createWithdrawalRequest({
