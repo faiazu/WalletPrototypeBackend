@@ -13,6 +13,8 @@ import type {
 
 import { AuthHoldStatus } from "../../generated/prisma/enums.js";
 import type { SplittingPolicyService } from "../wallet/splittingPolicyService.js";
+import { logger } from "../../core/logger.js";
+import { cardAuthCounter, cardClearingCounter } from "../../core/metrics.js";
 
 /**
  * Simple APPROVE/DECLINE decision type for card authorizations
@@ -117,16 +119,20 @@ export class CardProgramService {
     const card = await this.findCardByExternalId(event.providerCardId);
 
     if (!card) {
-      console.warn(
-        `[CardProgramService] Authorization for unknown card: providerCardId=${event.providerCardId}`
+      logger.warn(
+        { providerCardId: event.providerCardId, event: "card_auth" },
+        "Authorization declined: unknown card"
       );
+      cardAuthCounter.inc({ decision: "DECLINE", walletId: "unknown" });
       return "DECLINE";
     }
 
     if (card.status !== "ACTIVE") {
-      console.warn(
-        `[CardProgramService] Authorization for inactive card ${card.id} (status=${card.status})`
+      logger.warn(
+        { cardId: card.id, status: card.status, event: "card_auth" },
+        "Authorization declined: inactive card"
       );
+      cardAuthCounter.inc({ decision: "DECLINE", walletId: card.walletId || "unknown" });
       return "DECLINE";
     }
 
@@ -134,7 +140,8 @@ export class CardProgramService {
     try {
       walletId = this.requireWalletForCard(card);
     } catch (err) {
-      console.warn(String(err));
+      logger.warn({ cardId: card.id, error: String(err), event: "card_auth" }, "Authorization declined: wallet requirement failed");
+      cardAuthCounter.inc({ decision: "DECLINE", walletId: card.walletId || "unknown" });
       return "DECLINE";
     }
 
@@ -147,9 +154,11 @@ export class CardProgramService {
     });
 
     if (!internalCard) {
-      console.warn(
-        `[CardProgramService] Internal card not found for providerCardId=${event.providerCardId}`
+      logger.warn(
+        { providerCardId: event.providerCardId, event: "card_auth" },
+        "Authorization declined: internal card not found"
       );
+      cardAuthCounter.inc({ decision: "DECLINE", walletId });
       return "DECLINE";
     }
 
@@ -161,16 +170,27 @@ export class CardProgramService {
     const payingUserId = card.userId;
 
     if (available < event.amountMinor) {
-      console.warn(
-        `[CardProgramService] Authorization declined: insufficient funds. walletId=${walletId}, ` +
-          `poolBalance=${walletPoolBalance}, pendingHolds=${pendingHolds}, available=${available}, ` +
-          `requested=${event.amountMinor}`
+      logger.warn(
+        {
+          walletId,
+          cardId: internalCard.id,
+          poolBalance: walletPoolBalance,
+          pendingHolds,
+          available,
+          requested: event.amountMinor,
+          event: "card_auth"
+        },
+        "Authorization declined: insufficient funds"
       );
+      cardAuthCounter.inc({ decision: "DECLINE", walletId });
       return "DECLINE";
     }
 
     // All checks pass -> APPROVE from Divvi's side
     const decision: CardAuthDecision = "APPROVE";
+
+    // Record metrics
+    cardAuthCounter.inc({ decision, walletId });
 
     // Persist a hold for traceability (no funds move on auth yet)
     const providerAuthId = event.providerTransactionId;
@@ -212,10 +232,9 @@ export class CardProgramService {
         },
       });
     } catch (err) {
-      console.warn(
-        `[CardProgramService] Failed to persist auth hold for authId=${providerAuthId}: ${String(
-          err
-        )}`
+      logger.error(
+        { authId: providerAuthId, error: String(err), event: "card_auth" },
+        "Failed to persist auth hold"
       );
     }
 
@@ -235,8 +254,9 @@ export class CardProgramService {
     const baasCard = await this.findCardByExternalId(event.providerCardId);
 
     if (!baasCard) {
-      console.warn(
-        `[CardProgramService] Clearing for unknown card: providerCardId=${event.providerCardId}`
+      logger.warn(
+        { providerCardId: event.providerCardId, event: "card_clearing" },
+        "Clearing skipped: unknown card"
       );
       return;
     }
@@ -245,7 +265,7 @@ export class CardProgramService {
     try {
       walletId = this.requireWalletForCard(baasCard);
     } catch (err) {
-      console.warn(String(err));
+      logger.warn({ cardId: baasCard.id, error: String(err), event: "card_clearing" }, "Clearing skipped: wallet requirement failed");
       return;
     }
 
@@ -258,8 +278,9 @@ export class CardProgramService {
     });
 
     if (!internalCard) {
-      console.warn(
-        `[CardProgramService] Internal card not found for clearing: providerCardId=${event.providerCardId}`
+      logger.warn(
+        { providerCardId: event.providerCardId, event: "card_clearing" },
+        "Clearing skipped: internal card not found"
       );
       return;
     }
@@ -317,24 +338,34 @@ export class CardProgramService {
           },
         });
         if (result.count === 0) {
-          console.warn(
-            `[CardProgramService] No matching auth hold to clear for providerAuthId=${providerAuthId}`
+          logger.warn(
+            { authId: providerAuthId, event: "card_clearing" },
+            "No matching auth hold to clear"
           );
         }
       } catch (err) {
-        console.warn(
-          `[CardProgramService] Failed clearing auth hold for providerAuthId=${providerAuthId}: ${String(
-            err
-          )}`
+        logger.error(
+          { authId: providerAuthId, error: String(err), event: "card_clearing" },
+          "Failed clearing auth hold"
         );
       }
     }
 
-    console.log(
-      `[CardProgramService] Clearing posted to ledger: walletId=${walletId}, ` +
-        `cardholderUserId=${cardholderUserId}, amountMinor=${event.amountMinor} ${event.currency}, ` +
-        `splits=${JSON.stringify(splits)}`
+    logger.info(
+      {
+        walletId,
+        cardId: internalCard.id,
+        cardholderUserId,
+        amountMinor: event.amountMinor,
+        currency: event.currency,
+        splits,
+        event: "card_clearing"
+      },
+      "Clearing posted to ledger"
     );
+
+    // Record metrics
+    cardClearingCounter.inc({ walletId });
   }
 
   /**
@@ -356,12 +387,14 @@ export class CardProgramService {
           reversedAt: new Date(),
         },
       });
-      console.log(
-        `[CardProgramService] Auth reversal processed: authId=${providerAuthId}, cardId=${event.providerCardId}`
+      logger.info(
+        { authId: providerAuthId, cardId: event.providerCardId, event: "card_auth_reversal" },
+        "Auth reversal processed"
       );
     } catch (err) {
-      console.warn(
-        `[CardProgramService] Auth reversal with no matching hold: authId=${providerAuthId}, cardId=${event.providerCardId}`
+      logger.warn(
+        { authId: providerAuthId, cardId: event.providerCardId, event: "card_auth_reversal" },
+        "Auth reversal: no matching hold found"
       );
     }
   }

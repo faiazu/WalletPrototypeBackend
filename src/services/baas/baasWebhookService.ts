@@ -18,6 +18,8 @@ import type {
   NormalizedAccountStatusEvent,
   NormalizedCardStatusEvent,
 } from "./baasTypes.js";
+import { logger } from "../../core/logger.js";
+import { webhookCounter, webhookLatency } from "../../core/metrics.js";
 
 import { fundingRouteService } from "./fundingRouteService.js";
 import { withdrawalService } from "../wallet/withdrawalService.js";
@@ -132,14 +134,19 @@ export class BaasWebhookService {
    */
   async handleNormalizedEvent(event: NormalizedBaasEvent): Promise<void> {
     const providerName = event.provider;
+    const startTime = Date.now();
+    let status = "success";
 
-    const { isDuplicate } = await this.recordEvent(providerName, event);
-    if (isDuplicate) {
-      console.log(
-        `[BaasWebhookService] Duplicate event ignored: provider=${providerName}, eventId=${event.providerEventId}`
-      );
-      return;
-    }
+    try {
+      const { isDuplicate } = await this.recordEvent(providerName, event);
+      if (isDuplicate) {
+        logger.info(
+          { provider: providerName, eventId: event.providerEventId, event: "webhook" },
+          "Duplicate event ignored"
+        );
+        webhookCounter.inc({ provider: providerName, eventType: event.type, status: "duplicate" });
+        return;
+      }
 
     // Dispatch by type
     if (event.type === "CARD_AUTH") {
@@ -190,12 +197,22 @@ export class BaasWebhookService {
       return;
     }
 
-    const unmatchedEvent = event as NormalizedBaasEvent;
+      const unmatchedEvent = event as NormalizedBaasEvent;
 
-    console.warn(
-      `[BaasWebhookService] Unhandled event type: ${unmatchedEvent.type} from provider=${providerName}`
-    );
-    await this.markEventProcessed(providerName, unmatchedEvent.providerEventId);
+      logger.warn(
+        { eventType: unmatchedEvent.type, provider: providerName, event: "webhook" },
+        "Unhandled event type"
+      );
+      await this.markEventProcessed(providerName, unmatchedEvent.providerEventId);
+    } catch (err) {
+      status = "error";
+      throw err;
+    } finally {
+      // Record metrics
+      webhookCounter.inc({ provider: providerName, eventType: event.type, status });
+      const duration = (Date.now() - startTime) / 1000;
+      webhookLatency.observe({ provider: providerName, eventType: event.type }, duration);
+    }
   }
 
   /**
@@ -207,9 +224,14 @@ export class BaasWebhookService {
     try {
       await this.cardProgramService.handleAuthReversal(event);
     } catch (err) {
-      console.warn(
-        `[BaasWebhookService] Failed to process auth reversal: authId=${event.providerAuthId}, ` +
-          `cardId=${event.providerCardId}, err=${String(err)}`
+      logger.error(
+        {
+          authId: event.providerAuthId,
+          cardId: event.providerCardId,
+          error: String(err),
+          event: "card_auth_reversal"
+        },
+        "Failed to process auth reversal"
       );
     }
   }
@@ -227,9 +249,15 @@ export class BaasWebhookService {
     const decision: CardAuthDecision =
       await this.cardProgramService.handleAuthorization(event);
 
-    console.log(
-      `[BaasWebhookService] Card auth processed: decision=${decision}, ` +
-        `txId=${event.providerTransactionId}, cardId=${event.providerCardId}`
+    logger.info(
+      {
+        decision,
+        transactionId: event.providerTransactionId,
+        cardId: event.providerCardId,
+        amountMinor: event.amountMinor,
+        event: "card_auth"
+      },
+      "Card auth processed"
     );
   }
 
@@ -242,9 +270,15 @@ export class BaasWebhookService {
   ): Promise<void> {
     await this.cardProgramService.handleClearing(event);
 
-    console.log(
-      `[BaasWebhookService] Card clearing handled: txId=${event.providerTransactionId}, ` +
-        `cardId=${event.providerCardId}, amount=${event.amountMinor} ${event.currency}`
+    logger.info(
+      {
+        transactionId: event.providerTransactionId,
+        cardId: event.providerCardId,
+        amountMinor: event.amountMinor,
+        currency: event.currency,
+        event: "card_clearing"
+      },
+      "Card clearing handled"
     );
   }
 
@@ -262,8 +296,9 @@ export class BaasWebhookService {
     });
 
     if (!customer) {
-      console.warn(
-        `[BaasWebhookService] KYC verification: no user mapping found for personId=${event.personId}`
+      logger.warn(
+        { personId: event.personId, event: "kyc_verification" },
+        "KYC verification: no user mapping found"
       );
       return;
     }
@@ -280,14 +315,16 @@ export class BaasWebhookService {
       try {
         await this.ensureAccountForUser(customer.userId);
       } catch (err) {
-        console.warn(
-          `[BaasWebhookService] Failed to ensure account after KYC for user ${customer.userId}: ${String(err)}`
+        logger.error(
+          { userId: customer.userId, error: String(err), event: "kyc_verification" },
+          "Failed to ensure account after KYC"
         );
       }
     }
 
-    console.log(
-      `[BaasWebhookService] KYC status updated: userId=${customer.userId}, status=${event.verificationStatus}`
+    logger.info(
+      { userId: customer.userId, status: event.verificationStatus, event: "kyc_verification" },
+      "KYC status updated"
     );
   }
 
@@ -326,7 +363,7 @@ export class BaasWebhookService {
         },
       };
 
-      console.error(`[BaasWebhookService] ${JSON.stringify(warning)}`);
+      logger.error(warning, "Funding route not found after all fallback attempts");
       
       // We still mark the event processed so we don't retry forever.
       // Ops should monitor these logs to spot misconfigured routes.
@@ -335,8 +372,13 @@ export class BaasWebhookService {
 
     // CARD-CENTRIC FUNDING: Route to specific card's ledger
     if (!route.cardId) {
-      console.error(
-        `[BaasWebhookService] Funding route missing cardId for account ${event.providerAccountId}`
+      logger.error(
+        {
+          provider: event.provider,
+          providerAccountId: event.providerAccountId,
+          event: "wallet_funding"
+        },
+        "Funding route missing cardId"
       );
       return;
     }
@@ -360,9 +402,16 @@ export class BaasWebhookService {
       metadata,
     });
 
-    console.log(
-      `[BaasWebhookService] Card funding posted: cardId=${route.cardId}, ` +
-        `userId=${route.userId}, amount=${event.amountMinor} ${event.currency}`
+    logger.info(
+      {
+        cardId: route.cardId,
+        userId: route.userId,
+        walletId: route.walletId,
+        amountMinor: event.amountMinor,
+        currency: event.currency,
+        event: "wallet_funding"
+      },
+      "Card funding posted"
     );
   }
 
@@ -394,9 +443,14 @@ export class BaasWebhookService {
 
     // Fallback 1: Try default route (empty reference) if specific reference failed
     if (event.reference) {
-      console.warn(
-        `[BaasWebhookService] Funding route not found with reference="${event.reference}", ` +
-          `trying default route for provider=${event.provider}, accountId=${event.providerAccountId}`
+      logger.warn(
+        {
+          reference: event.reference,
+          provider: event.provider,
+          providerAccountId: event.providerAccountId,
+          event: "wallet_funding"
+        },
+        "Funding route not found with reference, trying default route"
       );
 
       const defaultRoute = await fundingRouteService.findRoute({
@@ -436,8 +490,9 @@ export class BaasWebhookService {
     });
 
     if (result.count === 0) {
-      console.warn(
-        `[BaasWebhookService] Account status event with no mapping: providerAccountId=${event.providerAccountId}`
+      logger.warn(
+        { providerAccountId: event.providerAccountId, event: "account_status" },
+        "Account status event with no mapping"
       );
     }
   }
@@ -460,8 +515,9 @@ export class BaasWebhookService {
     });
 
     if (result.count === 0) {
-      console.warn(
-        `[BaasWebhookService] Card status event with no mapping: providerCardId=${event.providerCardId}`
+      logger.warn(
+        { providerCardId: event.providerCardId, event: "card_status" },
+        "Card status event with no mapping"
       );
     }
   }
@@ -479,9 +535,14 @@ export class BaasWebhookService {
     );
 
     if (!transfer) {
-      console.warn(
-        `[BaasWebhookService] PAYOUT_STATUS_NOT_FOUND: providerTransferId=${event.providerTransferId}, ` +
-          `provider=${event.provider}, status=${event.status}`
+      logger.warn(
+        {
+          providerTransferId: event.providerTransferId,
+          provider: event.provider,
+          status: event.status,
+          event: "payout_status"
+        },
+        "Payout transfer not found"
       );
       return;
     }
@@ -506,10 +567,16 @@ export class BaasWebhookService {
           },
         });
 
-        console.log(
-          `[BaasWebhookService] Withdrawal completed: requestId=${request.id}, ` +
-            `walletId=${request.walletId}, userId=${request.userId}, ` +
-            `amountMinor=${request.amountMinor}`
+        logger.info(
+          {
+            requestId: request.id,
+            walletId: request.walletId,
+            userId: request.userId,
+            cardId: request.cardId,
+            amountMinor: request.amountMinor,
+            event: "payout_completed"
+          },
+          "Withdrawal completed"
         );
       } else if (event.status === "FAILED" || event.status === "REVERSED") {
         // Mark as failed
@@ -533,19 +600,29 @@ export class BaasWebhookService {
           },
         });
 
-        console.warn(
-          `[BaasWebhookService] Withdrawal failed/reversed: requestId=${request.id}, ` +
-            `walletId=${request.walletId}, userId=${request.userId}, ` +
-            `reason="${event.failureReason || 'Unknown'}"`
+        logger.warn(
+          {
+            requestId: request.id,
+            walletId: request.walletId,
+            userId: request.userId,
+            cardId: request.cardId,
+            reason: event.failureReason || 'Unknown',
+            event: "payout_failed"
+          },
+          "Withdrawal failed or reversed"
         );
 
         // TODO: Emit alert/notification for failed withdrawal
       }
     } catch (err) {
-      console.error(
-        `[BaasWebhookService] Error processing payout status: ` +
-          `requestId=${request.id}, providerTransferId=${event.providerTransferId}, ` +
-          `error=${String(err)}`
+      logger.error(
+        {
+          requestId: request.id,
+          providerTransferId: event.providerTransferId,
+          error: String(err),
+          event: "payout_status"
+        },
+        "Error processing payout status"
       );
       throw err;
     }
