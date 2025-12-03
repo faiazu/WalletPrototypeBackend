@@ -6,6 +6,7 @@ import {
   issueCard,
   postClientToken,
   postSingleUseToken,
+  terminateCard,
   updateCardNickname,
   updateCardStatus,
 } from "./controller.js";
@@ -22,5 +23,6 @@ router.use("/wallets/:walletId/cards", walletCardsRoutes);
 router.get("/cards/:cardId", authMiddleware, getCardDetails);
 router.patch("/cards/:cardId/status", authMiddleware, updateCardStatus);
 router.patch("/cards/:cardId/nickname", authMiddleware, updateCardNickname);
+router.post("/cards/:cardId/terminate", authMiddleware, terminateCard);
 
 export { router as cardRoutes };

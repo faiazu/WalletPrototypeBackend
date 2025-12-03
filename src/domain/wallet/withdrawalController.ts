@@ -8,9 +8,10 @@ import { baasService } from "../../core/dependencies.js";
 import { isMember } from "../../services/wallet/memberService.js";
 
 /**
- * Request body schema for withdrawal creation
+ * Request body schema for withdrawal creation (CARD-CENTRIC)
  */
 const createWithdrawalSchema = z.object({
+  cardId: z.string().min(1, "Card ID is required"),
   amountMinor: z.number().int().positive("Amount must be positive"),
   currency: z.string().default("USD"),
   metadata: z.any().optional(),
@@ -37,7 +38,7 @@ export const createWithdrawal = [
       const walletId = req.params.id!;
 
       // Validate request body
-      const { amountMinor, currency, metadata } = createWithdrawalSchema.parse(req.body);
+      const { cardId, amountMinor, currency, metadata } = createWithdrawalSchema.parse(req.body);
 
       // Validate user is wallet member
       if (!(await isMember(walletId, userId))) {
@@ -47,9 +48,10 @@ export const createWithdrawal = [
         });
       }
 
-      // Execute withdrawal flow in transaction
+      // Execute withdrawal flow in transaction (CARD-CENTRIC)
       const result = await withdrawalService.executeWithdrawal({
         walletId,
+        cardId,
         userId,
         amountMinor,
         currency,

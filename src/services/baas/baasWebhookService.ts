@@ -333,6 +333,14 @@ export class BaasWebhookService {
       return;
     }
 
+    // CARD-CENTRIC FUNDING: Route to specific card's ledger
+    if (!route.cardId) {
+      console.error(
+        `[BaasWebhookService] Funding route missing cardId for account ${event.providerAccountId}`
+      );
+      return;
+    }
+
     const metadata = {
       provider: event.provider,
       providerEventId: event.providerEventId,
@@ -343,16 +351,17 @@ export class BaasWebhookService {
       occurredAt: event.occurredAt.toISOString(),
     };
 
-    await this.ledger.postDeposit({
+    // Use card-specific deposit method
+    await ledgerService.postCardDeposit({
       transactionId: event.providerTransactionId,
-      walletId: route.walletId,
+      cardId: route.cardId,
       userId: route.userId,
       amount: event.amountMinor,
       metadata,
     });
 
     console.log(
-      `[BaasWebhookService] Wallet funding posted: walletId=${route.walletId}, ` +
+      `[BaasWebhookService] Card funding posted: cardId=${route.cardId}, ` +
         `userId=${route.userId}, amount=${event.amountMinor} ${event.currency}`
     );
   }

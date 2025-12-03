@@ -24,10 +24,10 @@ export type CardAuthDecision = "APPROVE" | "DECLINE";
  * We adapt your existing ledgerService to this.
  */
 export interface LedgerServiceForCardProgram {
-  getWalletPoolBalance(walletId: string): Promise<number>;
-  postCardCapture(input: {
+  getCardPoolAccount(cardId: string): Promise<{ balance: number }>;
+  postCardCaptureNew(input: {
     transactionId: string;
-    walletId: string;
+    cardId: string;
     splits: Array<{ userId: string; amount: number }>;
     metadata?: any;
   }): Promise<any>;
@@ -63,13 +63,13 @@ export class CardProgramService {
   }
 
   /**
-   * Sum of pending holds for a wallet. Used to adjust available balance on auth.
+   * Sum of pending holds for a specific card. Used to adjust available balance on auth.
    */
-  private async getPendingHoldTotal(walletId: string): Promise<number> {
+  private async getPendingHoldTotal(cardId: string): Promise<number> {
     const result = await this.prisma.cardAuthHold.aggregate({
       _sum: { amountMinor: true },
       where: {
-        walletId,
+        cardId,
         status: AuthHoldStatus.PENDING,
       },
     });
@@ -138,11 +138,26 @@ export class CardProgramService {
       return "DECLINE";
     }
 
-    // Check internal wallet_pool balance minus pending holds.
-    // Note: pool is stored as a liability (negative when funded), so negate it for available.
-    const walletPoolBalance = await this.ledger.getWalletPoolBalance(walletId);
-    const pendingHolds = await this.getPendingHoldTotal(walletId);
-    const available = -walletPoolBalance - pendingHolds;
+    // Find internal Card record
+    const internalCard = await this.prisma.card.findFirst({
+      where: {
+        walletId,
+        providerCardId: event.providerCardId,
+      },
+    });
+
+    if (!internalCard) {
+      console.warn(
+        `[CardProgramService] Internal card not found for providerCardId=${event.providerCardId}`
+      );
+      return "DECLINE";
+    }
+
+    // Check CARD-SPECIFIC pool balance minus pending holds
+    // Note: pool is stored as a liability (negative when funded), so negate it for available
+    const cardPoolAccount = await this.ledger.getCardPoolAccount(internalCard.id);
+    const pendingHolds = await this.getPendingHoldTotal(internalCard.id);
+    const available = -cardPoolAccount.balance - pendingHolds;
     const payingUserId = card.userId;
 
     if (available < event.amountMinor) {
@@ -187,6 +202,7 @@ export class CardProgramService {
           providerName: event.provider,
           providerAuthId,
           providerCardId: event.providerCardId,
+          cardId: internalCard.id,
           walletId,
           userId: payingUserId,
           amountMinor: event.amountMinor,
@@ -216,9 +232,9 @@ export class CardProgramService {
    *  - EQUAL_SPLIT: amount divided equally among all wallet members
    */
   async handleClearing(event: NormalizedCardClearingEvent): Promise<void> {
-    const card = await this.findCardByExternalId(event.providerCardId);
+    const baasCard = await this.findCardByExternalId(event.providerCardId);
 
-    if (!card) {
+    if (!baasCard) {
       console.warn(
         `[CardProgramService] Clearing for unknown card: providerCardId=${event.providerCardId}`
       );
@@ -227,13 +243,28 @@ export class CardProgramService {
 
     let walletId: string;
     try {
-      walletId = this.requireWalletForCard(card);
+      walletId = this.requireWalletForCard(baasCard);
     } catch (err) {
       console.warn(String(err));
       return;
     }
 
-    const cardholderUserId = card.userId;
+    // Find internal Card record
+    const internalCard = await this.prisma.card.findFirst({
+      where: {
+        walletId,
+        providerCardId: event.providerCardId,
+      },
+    });
+
+    if (!internalCard) {
+      console.warn(
+        `[CardProgramService] Internal card not found for clearing: providerCardId=${event.providerCardId}`
+      );
+      return;
+    }
+
+    const cardholderUserId = baasCard.userId;
 
     // Calculate splits based on wallet's spend policy
     const policyBasedSplits = await this.splittingPolicyService.calculateSplits(
@@ -263,9 +294,10 @@ export class CardProgramService {
       occurredAt: event.occurredAt.toISOString(),
     };
 
-    await this.ledger.postCardCapture({
+    // Use card-specific capture method
+    await this.ledger.postCardCaptureNew({
       transactionId: event.providerTransactionId,
-      walletId,
+      cardId: internalCard.id,
       splits,
       metadata,
     });

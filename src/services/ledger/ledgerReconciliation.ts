@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { LedgerAccount } from "../../generated/prisma/client.js";
+import { LedgerScope } from "../../generated/prisma/client.js";
 
 import { prisma } from "../../core/db.js";
 
@@ -80,4 +81,79 @@ export class LedgerReconciliationService {
 
     return result;
   }
+
+  /**
+   * Reconcile ledger accounts for a specific card.
+   * 
+   * Ensures:
+   *   sum(card_member_equity.balance) == card_pool.balance
+   */
+  static async reconcileCard(cardId: string): Promise<CardLedgerReconciliationResult> {
+    // 1. Fetch card pool account
+    const cardPoolAccount = await prisma.ledgerAccount.findFirst({
+      where: {
+        cardId,
+        ledgerScope: LedgerScope.CARD_POOL,
+        userId: null,
+      },
+    });
+
+    if (!cardPoolAccount) {
+      throw new Error("Card pool account not found");
+    }
+
+    // 2. Fetch all equity accounts for this card
+    const cardMemberEquityAccounts = await prisma.ledgerAccount.findMany({
+      where: {
+        cardId,
+        ledgerScope: LedgerScope.CARD_MEMBER_EQUITY,
+      },
+    });
+
+    // 3. Fetch pending withdrawal account (if exists)
+    const cardPendingAccount = await prisma.ledgerAccount.findFirst({
+      where: {
+        cardId,
+        ledgerScope: LedgerScope.CARD_PENDING_WITHDRAWAL,
+        userId: null,
+      },
+    });
+
+    // 4. Sum balances
+    const sumOfMemberEquity = cardMemberEquityAccounts.reduce(
+      (sum, acc) => sum + acc.balance,
+      0
+    );
+
+    const pendingWithdrawalBalance = cardPendingAccount?.balance || 0;
+
+    // 5. Verify consistency
+    // Pool is negative (liability), equity + pending are positive (assets)
+    // They should net to zero: equity + pending + pool === 0
+    const consistent = sumOfMemberEquity + pendingWithdrawalBalance + cardPoolAccount.balance === 0;
+
+    // 6. Build result
+    const result: CardLedgerReconciliationResult = {
+      cardId,
+      cardPoolAccount,
+      cardMemberEquityAccounts,
+      cardPendingAccount: cardPendingAccount || null,
+      sumOfMemberEquity,
+      pendingWithdrawalBalance,
+      consistent,
+    };
+
+    return result;
+  }
+}
+
+// Card Reconciliation Result Interface
+export interface CardLedgerReconciliationResult {
+  cardId: string;
+  cardPoolAccount: LedgerAccount;
+  cardMemberEquityAccounts: LedgerAccount[];
+  cardPendingAccount: LedgerAccount | null;
+  sumOfMemberEquity: number;
+  pendingWithdrawalBalance: number;
+  consistent: boolean;
 }

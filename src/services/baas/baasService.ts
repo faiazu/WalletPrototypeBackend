@@ -181,6 +181,89 @@ export class BaasService {
   }
 
   /**
+   * Ensure there is a BaasAccount for a specific card (1:1 relationship).
+   * Creates a new account for this card if one doesn't exist.
+   */
+  async ensureAccountForCard(
+    cardId: string,
+    userId: string,
+    walletId: string,
+    reference?: string
+  ): Promise<BaasAccount> {
+    if (!supportsAccountCreation(this.client)) {
+      throw new Error("AccountCreationNotSupported");
+    }
+
+    // Check if this card already has an account
+    const existing = await this.prisma.baasAccount.findUnique({
+      where: { cardId },
+    });
+
+    if (existing) {
+      return existing;
+    }
+
+    // Ensure customer exists
+    const { provider, externalCustomerId, baasCustomerId } =
+      await this.ensureCustomerForUser(userId);
+
+    // Create a new account for this specific card
+    const accountResult: CreateAccountResult = await this.client.createAccount({
+      externalCustomerId,
+    });
+
+    const account = await this.prisma.baasAccount.create({
+      data: {
+        userId,
+        cardId, // 1:1 link to card
+        baasCustomerId,
+        providerName: provider,
+        externalAccountId: accountResult.externalAccountId,
+        accountType: accountResult.accountType ?? "CHECKING",
+        currency: accountResult.currency ?? "USD",
+        status: accountResult.status ?? "PENDING",
+        accessStatus: accountResult.accessStatus ?? null,
+        accountNumberLast4: accountResult.accountNumberLast4 ?? null,
+        routingNumber: accountResult.routingNumber ?? null,
+        metadata: accountResult.rawResponse ?? null,
+      },
+    });
+
+    // Create funding route linking this account to the card
+    const fundingReference = reference || "";
+    await this.prisma.baasFundingRoute.upsert({
+      where: {
+        providerName_providerAccountId_reference: {
+          providerName: provider,
+          providerAccountId: accountResult.externalAccountId,
+          reference: fundingReference,
+        },
+      },
+      update: {
+        walletId,
+        userId,
+        cardId,
+        baasAccountId: account.id,
+      },
+      create: {
+        providerName: provider,
+        providerAccountId: accountResult.externalAccountId,
+        reference: fundingReference,
+        walletId,
+        userId,
+        cardId,
+        baasAccountId: account.id,
+      },
+    });
+
+    console.log(
+      `✅ Created account ${account.externalAccountId} for card ${cardId} with funding route`
+    );
+
+    return account;
+  }
+
+  /**
    * Create a card for a user and tie it to a specific wallet.
    *
    * This is crucial for your cardProgramService:
@@ -199,6 +282,8 @@ export class BaasService {
     status?: string;
     nickname?: string | null;
   }> {
+    const { initializeLedgerForCard } = await import("../ledger/initLedger.js");
+
     // 1) Ensure user exists + belongs to this wallet
     const walletMember = await this.prisma.walletMember.findFirst({
       where: {
@@ -222,62 +307,73 @@ export class BaasService {
     const { provider, externalCustomerId, baasCustomerId } =
       await this.ensureCustomerForUser(userId);
 
-    // 3) Ensure a provider account exists (and bind to wallet if provided)
-    const account = await this.ensureAccountForUser(userId, walletId);
-
-    // 4) Ask provider to create a card
-    const cardResult: CreateCardResult = await this.client.createCard({
-      userId,
-      externalCustomerId,
-      externalAccountId: account.externalAccountId,
-      embossName: buildEmbossName(user?.name, user?.email),
-      // later you can add params like spending limits here
-    } as CreateCardParams);
-
-    // If a card already exists for this wallet/user/provider with same external id, return it.
-    const existingCard = await this.prisma.baasCard.findFirst({
-      where: {
-        userId,
+    // 3) FIRST: Create internal Card record (so we have a cardId for the account)
+    const internalCard = await this.prisma.card.create({
+      data: {
         walletId,
-        providerName: this.provider,
-        externalCardId: cardResult.externalCardId,
+        status: "ACTIVE",
       },
     });
 
-    if (existingCard) {
-      return {
-        id: existingCard.id,
-        provider: existingCard.providerName,
-        externalCardId: existingCard.externalCardId,
-        ...(existingCard.last4 && { last4: existingCard.last4 }),
-        ...(existingCard.status && { status: existingCard.status }),
-        nickname: existingCard.nickname ?? null,
-      };
-    }
+    try {
+      // 4) Create card-specific Synctera account (1:1 with card)
+      const account = await this.ensureAccountForCard(internalCard.id, userId, walletId);
 
-    // 5) Persist mapping in BaasCard, including walletId
-    const newCard = await this.prisma.baasCard.create({
-      data: {
+      // 5) Ask provider to create the physical/virtual card
+      const cardResult: CreateCardResult = await this.client.createCard({
         userId,
-        walletId,
-        baasCustomerId,
-        baasAccountId: account.id,
-        providerName: cardResult.provider,
+        externalCustomerId,
+        externalAccountId: account.externalAccountId,
+        embossName: buildEmbossName(user?.name, user?.email),
+      } as CreateCardParams);
+
+      // 6) Persist BaasCard mapping (links Synctera card to our internal card)
+      const baasCard = await this.prisma.baasCard.create({
+        data: {
+          userId,
+          walletId,
+          baasCustomerId,
+          baasAccountId: account.id,
+          providerName: cardResult.provider,
+          externalCardId: cardResult.externalCardId,
+          last4: cardResult.last4 ?? null,
+          status: cardResult.status ?? "ACTIVE",
+          nickname: options?.nickname ?? null,
+        },
+      });
+
+      // 7) Update internal Card with Synctera card ID
+      await this.prisma.card.update({
+        where: { id: internalCard.id },
+        data: { providerCardId: cardResult.externalCardId },
+      });
+
+      // 8) Initialize card-scoped ledgers (pool + member equity accounts)
+      await this.prisma.$transaction(async (tx) => {
+        await initializeLedgerForCard(tx, internalCard.id, walletId);
+      });
+
+      console.log(
+        `✅ Card created: internal=${internalCard.id}, external=${cardResult.externalCardId}, account=${account.externalAccountId}`
+      );
+
+      return {
+        id: baasCard.id,
+        provider: cardResult.provider,
         externalCardId: cardResult.externalCardId,
-        last4: cardResult.last4 ?? null,
+        ...(cardResult.last4 && { last4: cardResult.last4 }),
         status: cardResult.status ?? "ACTIVE",
         nickname: options?.nickname ?? null,
-      },
-    });
-
-    return {
-      id: newCard.id,
-      provider: cardResult.provider,
-      externalCardId: cardResult.externalCardId,
-      ...(cardResult.last4 && { last4: cardResult.last4 }),
-      status: cardResult.status ?? "ACTIVE",
-      nickname: options?.nickname ?? null,
-    };
+      };
+    } catch (error) {
+      // Rollback: delete the internal card if any step fails
+      await this.prisma.card.delete({
+        where: { id: internalCard.id },
+      }).catch(() => {
+        // Ignore if already deleted
+      });
+      throw error;
+    }
   }
 
   /**

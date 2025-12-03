@@ -22,17 +22,18 @@ export class WithdrawalService {
   }
 
   /**
-   * Create a new withdrawal request
+   * Create a new withdrawal request (CARD-CENTRIC)
    * 
    * Validates:
    * - User is wallet member
-   * - User has sufficient equity
+   * - User has sufficient equity in THIS CARD
    * - Amount is positive
    * 
    * Creates request with PENDING status
    */
   async createWithdrawalRequest({
     walletId,
+    cardId,
     userId,
     amountMinor,
     currency = "USD",
@@ -40,6 +41,7 @@ export class WithdrawalService {
     ledgerService,
   }: {
     walletId: string;
+    cardId: string;
     userId: string;
     amountMinor: number;
     currency?: string;
@@ -56,9 +58,9 @@ export class WithdrawalService {
       throw new Error("InvalidAmount");
     }
 
-    // Check user equity
-    const equityAccount = await ledgerService.getMemberEquityAccount(walletId, userId);
-    if (equityAccount.balance < amountMinor) {
+    // Check user's equity in THIS CARD (not wallet-level)
+    const cardEquityAccount = await ledgerService.getCardMemberEquityAccount(cardId, userId);
+    if (cardEquityAccount.balance < amountMinor) {
       throw new Error("InsufficientEquity");
     }
 
@@ -66,6 +68,7 @@ export class WithdrawalService {
     const request = await this.prisma.withdrawalRequest.create({
       data: {
         walletId,
+        cardId,
         userId,
         amountMinor,
         currency,
@@ -304,11 +307,11 @@ export class WithdrawalService {
   }
 
   /**
-   * Execute complete withdrawal flow
+   * Execute complete withdrawal flow (CARD-CENTRIC)
    * 
    * Coordinates:
    * 1. Create withdrawal request
-   * 2. Move funds to pending liability
+   * 2. Move funds to card-specific pending liability
    * 3. Initiate provider payout
    * 4. Create transfer record
    * 
@@ -316,6 +319,7 @@ export class WithdrawalService {
    */
   async executeWithdrawal({
     walletId,
+    cardId,
     userId,
     amountMinor,
     currency = "USD",
@@ -324,6 +328,7 @@ export class WithdrawalService {
     ledgerService,
   }: {
     walletId: string;
+    cardId: string;
     userId: string;
     amountMinor: number;
     currency?: string;
@@ -334,6 +339,7 @@ export class WithdrawalService {
     // Step 1: Create withdrawal request
     const request = await this.createWithdrawalRequest({
       walletId,
+      cardId,
       userId,
       amountMinor,
       currency,
@@ -342,11 +348,11 @@ export class WithdrawalService {
     });
 
     try {
-      // Step 2: Move funds to pending liability in ledger
+      // Step 2: Move funds to CARD-SPECIFIC pending liability in ledger
       const ledgerTransactionId = `withdrawal_pending_${request.id}`;
-      await ledgerService.postPendingWithdrawal({
+      await ledgerService.postPendingCardWithdrawal({
         transactionId: ledgerTransactionId,
-        walletId,
+        cardId,
         userId,
         amount: amountMinor,
         metadata: {
@@ -370,6 +376,7 @@ export class WithdrawalService {
         reference: request.id,
         metadata: {
           withdrawalRequestId: request.id,
+          cardId,
           ...metadata,
         },
       });
@@ -384,6 +391,7 @@ export class WithdrawalService {
         metadata: {
           payoutStatus: payoutResult.status,
           estimatedCompletion: payoutResult.estimatedCompletionDate,
+          cardId,
           ...metadata,
         },
       });
