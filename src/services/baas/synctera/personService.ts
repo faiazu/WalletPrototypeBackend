@@ -88,9 +88,9 @@ export async function activatePerson(input: ActivatePersonInput): Promise<Syncte
 
   const client = getSyncteraClient();
   try {
-    const res = await client.patch(`/persons/${personId}`, payload);
+  const res = await client.patch(`/persons/${personId}`, payload);
     Debugger.logInfo(`[Synctera] Activated person ${personId}`);
-    return res.data as SyncteraPerson;
+  return res.data as SyncteraPerson;
   } catch (err: any) {
     Debugger.logError(`[Synctera] Failed to activate person ${personId}: ${err.message}`);
     if (err.response?.data) {
@@ -117,9 +117,9 @@ export async function runKyc(input: RunKycInput): Promise<any> {
   };
 
   try {
-    const res = await client.post("/verifications/verify", payload);
+  const res = await client.post("/verifications/verify", payload);
     Debugger.logInfo(`[Synctera] KYC verification initiated for person ${input.personId}`);
-    return res.data;
+  return res.data;
   } catch (err: any) {
     Debugger.logError(`[Synctera] KYC verification failed for person ${input.personId}: ${err.message}`);
     if (err.response?.data) {
