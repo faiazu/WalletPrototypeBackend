@@ -56,7 +56,7 @@ model User {
   walletsAdmin   Wallet[]        @relation("WalletAdmin")
   memberships    WalletMember[]
 
-  baasCustomer      BaasCustomer?
+  baasCustomer       BaasCustomer?
   baasCards          BaasCard[]
   baasFundingRoutes  BaasFundingRoute[]
   cardAuthHolds      CardAuthHold[]

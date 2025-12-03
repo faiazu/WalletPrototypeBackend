@@ -13,7 +13,9 @@
     "validate-results": "tsx scripts/validate-simulation-results.ts",
     "test:e2e": "npm run simulate:ci && npm run validate-results ci-results.json",
     "test:all-simulations": "./scripts/test-all-simulations.sh",
-    "test:synctera": "BAAS_PROVIDER=SYNCTERA tsx scripts/test-synctera-integration.ts"
+    "test:synctera": "BAAS_PROVIDER=SYNCTERA tsx scripts/test-synctera-integration.ts",
+    "wipe:synctera": "tsx src/tests/scripts/synctera/wipeSandbox.ts",
+    "reset:all": "tsx scripts/reset-all.ts"
   },
   "keywords": [],
   "author": "",
