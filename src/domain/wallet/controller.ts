@@ -91,15 +91,15 @@ export const inviteMember = [
 
       const member = await addMember(walletId, invitee.id, role || "member");
 
-      // Fetch wallet details and balances to return enriched context
+      // Fetch wallet details and aggregated balances from all cards
       const wallet = await walletService.getWalletDetails(walletId);
-      const rawBalances = await ledgerService.getWalletDisplayBalances(walletId);
+      const aggregatedBalances = await ledgerService.getAggregatedWalletBalances(walletId);
 
       // Convert cents to dollars for iOS client
       const centsToDollars = (cents: number): number => cents / 100;
       const balances = {
-        poolDisplay: centsToDollars(rawBalances.poolDisplay),
-        memberEquity: rawBalances.memberEquity.map(m => ({
+        poolDisplay: centsToDollars(aggregatedBalances.totalPoolDisplay),
+        memberEquity: aggregatedBalances.totalMemberEquity.map(m => ({
           userId: m.userId,
           balance: centsToDollars(m.balance)
         }))
@@ -134,15 +134,15 @@ export const joinWallet = [
 
       const member = await addMember(walletId, userId, "member");
 
-      // Fetch wallet details and balances to return enriched context
+      // Fetch wallet details and aggregated balances from all cards
       const wallet = await walletService.getWalletDetails(walletId);
-      const rawBalances = await ledgerService.getWalletDisplayBalances(walletId);
+      const aggregatedBalances = await ledgerService.getAggregatedWalletBalances(walletId);
 
       // Convert cents to dollars for iOS client
       const centsToDollars = (cents: number): number => cents / 100;
       const balances = {
-        poolDisplay: centsToDollars(rawBalances.poolDisplay),
-        memberEquity: rawBalances.memberEquity.map(m => ({
+        poolDisplay: centsToDollars(aggregatedBalances.totalPoolDisplay),
+        memberEquity: aggregatedBalances.totalMemberEquity.map(m => ({
           userId: m.userId,
           balance: centsToDollars(m.balance)
         }))
@@ -157,6 +157,7 @@ export const joinWallet = [
 
 /**
  * Controller for fetching wallet details.
+ * Now aggregates balances from ALL cards in the wallet (card-centric architecture)
  */
 export const getWalletDetails = [
   authMiddleware,
@@ -172,15 +173,26 @@ export const getWalletDetails = [
       const member = await isMember(walletId, userId);
       if (!admin && !member) return res.status(403).json({ error: "Access denied" });
 
-      const rawBalances = await ledgerService.getWalletDisplayBalances(walletId);
+      // Get aggregated balances from all cards
+      const aggregatedBalances = await ledgerService.getAggregatedWalletBalances(walletId);
 
       // Convert cents to dollars for iOS client
       const centsToDollars = (cents: number): number => cents / 100;
       const balances = {
-        poolDisplay: centsToDollars(rawBalances.poolDisplay),
-        memberEquity: rawBalances.memberEquity.map(m => ({
+        poolDisplay: centsToDollars(aggregatedBalances.totalPoolDisplay),
+        memberEquity: aggregatedBalances.totalMemberEquity.map(m => ({
           userId: m.userId,
           balance: centsToDollars(m.balance)
+        })),
+        // Include card breakdown for transparency
+        cardBreakdown: aggregatedBalances.cardBreakdown.map(card => ({
+          cardId: card.cardId,
+          poolDisplay: centsToDollars(card.poolDisplay),
+          memberEquity: card.memberEquity.map(m => ({
+            userId: m.userId,
+            balance: centsToDollars(m.balance)
+          })),
+          pendingWithdrawals: centsToDollars(card.pendingWithdrawals)
         }))
       };
 

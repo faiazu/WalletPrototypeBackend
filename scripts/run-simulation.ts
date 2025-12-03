@@ -270,9 +270,10 @@ async function step4_cardIssuance(ctx: SimulationContext): Promise<void> {
 }
 
 async function step5_initialDeposit(ctx: SimulationContext): Promise<void> {
+  // Use card-centric deposit endpoint
   const result = await cliRequest(
     "post",
-    `/test/ledger/deposit/${ctx.walletId}`,
+    `/ledger/cards/${ctx.cardId}/deposit`,
     {
       amount: config.depositAmount,
       metadata: { source: "simulation" },
@@ -280,8 +281,9 @@ async function step5_initialDeposit(ctx: SimulationContext): Promise<void> {
     ctx.token
   );
 
-  log(`   → Deposited: ${formatAmount(config.depositAmount)}`);
+  log(`   → Deposited: ${formatAmount(config.depositAmount)} to card ${ctx.cardId}`);
   log(`   → Transaction ID: ${result.transactionId}`);
+  log(`   → Card Pool Balance: $${result.ledger.poolBalance.toFixed(2)}`);
 }
 
 async function step6_cardAuthorization(ctx: SimulationContext): Promise<void> {
@@ -411,9 +413,10 @@ async function step10_payoutCompletion(ctx: SimulationContext): Promise<void> {
 }
 
 async function step11_validation(ctx: SimulationContext): Promise<any> {
+  // Use card-centric reconciliation endpoint
   const reconciliation = await cliRequest(
     "get",
-    `/ledger/${ctx.walletId}/reconciliation`,
+    `/ledger/cards/${ctx.cardId}/reconciliation`,
     null,
     ctx.token
   );
@@ -426,16 +429,17 @@ async function step11_validation(ctx: SimulationContext): Promise<any> {
     equity: config.depositAmount + config.fundingAmount - config.spendAmount - withdrawalAmount,
   };
 
-  const actualPool = -reconciliation.poolAccount.balance;
-  const actualEquity = reconciliation.sumOfMemberEquity; // Fixed: was sumMemberEquity
+  // Card reconciliation returns balances already in cents (not negated)
+  const actualPool = reconciliation.poolBalance;
+  const actualEquity = reconciliation.sumOfMemberEquity;
 
   const poolMatch = actualPool === expected.pool;
   const equityMatch = actualEquity === expected.equity;
-  const invariantPass = reconciliation.consistent === true; // Fixed: was ledgerInvariant === "PASS"
+  const invariantPass = reconciliation.consistent === true;
 
   const invariantStatus = reconciliation.consistent ? "PASS" : "FAIL";
 
-  log(`   → Wallet Pool: ${formatAmount(actualPool)} (expected: ${formatAmount(expected.pool)}) ${poolMatch ? "✓" : "✗"}`);
+  log(`   → Card Pool: ${formatAmount(actualPool)} (expected: ${formatAmount(expected.pool)}) ${poolMatch ? "✓" : "✗"}`);
   log(`   → Member Equity: ${formatAmount(actualEquity)} (expected: ${formatAmount(expected.equity)}) ${equityMatch ? "✓" : "✗"}`);
   log(`   → Ledger Invariant: ${invariantStatus} ${invariantPass ? "✓" : "✗"}`);
 

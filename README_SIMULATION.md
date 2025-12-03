@@ -75,21 +75,28 @@ npm run test:all-simulations
 1. **Authentication** - User login and token generation
 2. **KYC Verification** - Identity verification (or skip if already verified)
 3. **Wallet Creation** - Multi-user wallet with ledger initialization
-4. **Card Issuance** - Virtual card creation
-5. **Initial Deposit** - Add funds to wallet
+4. **Card Issuance** - Virtual card creation with card-scoped ledger accounts
+5. **Initial Deposit** - Add funds to card via `/ledger/cards/:cardId/deposit`
 6. **Card Authorization** - Authorization hold placement
 7. **Card Clearing** - Transaction clearing with spend splits
 8. **Wallet Funding** - Inbound ACH/transfer with routing
-9. **Withdrawal** - Member initiates payout request
+9. **Withdrawal** - Member initiates payout request (card-scoped)
 10. **Payout Completion** - Provider confirms payout
-11. **Validation** - Ledger reconciliation and invariant check
+11. **Validation** - Card-level ledger reconciliation and invariant check
 
 ### Validation Checks
 - ✅ All steps execute successfully
-- ✅ Wallet pool balance matches expected
-- ✅ Member equity balance matches expected  
-- ✅ Ledger invariant passes (assets = liabilities)
+- ✅ Card pool balance matches expected
+- ✅ Card member equity balance matches expected  
+- ✅ Card ledger invariant passes (pool = member equity + pending withdrawals)
 - ✅ Exit code 0 on success
+
+### Card-Centric Architecture
+The simulation now operates on a **card-centric** model:
+- Each card has its own pool and member equity accounts
+- Deposits/withdrawals target specific cards via `/ledger/cards/:cardId/*`
+- Reconciliation validates per-card ledger consistency
+- Wallet balances are aggregated from all cards
 
 ## Example Scenarios
 

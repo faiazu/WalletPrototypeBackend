@@ -1,18 +1,18 @@
-// script to test withdrawing funds from a wallet via the MOCK withdraw route
+// script to test withdrawing funds from a card via the card-centric withdraw route
 
 import { cliRequest, handleCliError } from "../../helpers/cliHelper.js";
 
 /**
- * Withdraws funds from a wallet using the MOCK withdraw route.
+ * Withdraws funds from a card using the card-centric withdraw route.
  * Usage:
- *   npx tsx src/tests/scripts/ledger/withdrawl.ts <TOKEN> <WALLET_ID> <AMOUNT>
+ *   npx tsx src/tests/scripts/ledger/withdrawl.ts <TOKEN> <CARD_ID> <AMOUNT>
  */
 async function main() {
   try {
-    const [token, walletId, amountStr] = process.argv.slice(2);
+    const [token, cardId, amountStr] = process.argv.slice(2);
 
-    if (!token || !walletId || !amountStr) {
-      console.error("Usage: tsx src/tests/scripts/ledger/withdrawl.ts <TOKEN> <WALLET_ID> <AMOUNT>");
+    if (!token || !cardId || !amountStr) {
+      console.error("Usage: tsx src/tests/scripts/ledger/withdrawl.ts <TOKEN> <CARD_ID> <AMOUNT>");
       process.exit(1);
     }
 
@@ -20,12 +20,12 @@ async function main() {
 
     const result = await cliRequest(
       "post",
-      `/ledger/${walletId}/withdraw`,
+      `/ledger/cards/${cardId}/withdraw`,
       { amount: amount },
       token
     );
 
-    console.log("✅ Withdrew funds:");
+    console.log("✅ Withdrew funds from card:");
     console.log(JSON.stringify(result, null, 2));
   } catch (err: any) {
     handleCliError(err);

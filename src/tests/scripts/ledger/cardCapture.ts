@@ -1,36 +1,45 @@
-// script to test card capture via the MOCK ledger card capture route
+// script to test card capture via the card-centric capture route
 
 import { cliRequest, handleCliError } from "../../helpers/cliHelper.js";
 
 /**
- * Captures a card using the MOCK ledger card capture route.
+ * Captures a card transaction using the card-centric capture route.
  * Usage:
- *   npx tsx src/tests/scripts/ledger/cardCapture.ts <TOKEN> <WALLET_ID>
+ *   npx tsx src/tests/scripts/ledger/cardCapture.ts <TOKEN> <CARD_ID> <USER_ID_1> <AMOUNT_1> [<USER_ID_2> <AMOUNT_2> ...]
  */
 async function main() {
   try {
-    const [token, walletId] = process.argv.slice(2);
+    const [token, cardId, ...splitArgs] = process.argv.slice(2);
 
-    if (!token || !walletId) {
-      console.error("Usage: tsx src/tests/scripts/ledger/cardCapture.ts <TOKEN> <WALLET_ID>");
+    if (!token || !cardId || splitArgs.length < 2) {
+      console.error("Usage: tsx src/tests/scripts/ledger/cardCapture.ts <TOKEN> <CARD_ID> <USER_ID_1> <AMOUNT_1> [<USER_ID_2> <AMOUNT_2> ...]");
+      console.error("Example: tsx src/tests/scripts/ledger/cardCapture.ts <TOKEN> card123 user1 3000 user2 3000");
       process.exit(1);
     }
 
-    // For testing purposes, use two fixed user IDs with hardcoded split amounts
-    // TODO: replace userIds with actual user IDs from test database
-    const splits = [
-      { userId: "USER_ID_1", amount: 3000 },
-      { userId: "USER_ID_2", amount: 3000 },
-    ];
+    // Parse splits from arguments (userId, amount pairs)
+    const splits = [];
+    for (let i = 0; i < splitArgs.length; i += 2) {
+      if (i + 1 >= splitArgs.length) break;
+      splits.push({
+        userId: splitArgs[i],
+        amount: Number(splitArgs[i + 1]),
+      });
+    }
+
+    if (splits.length === 0) {
+      console.error("Error: No valid splits provided");
+      process.exit(1);
+    }
 
     const result = await cliRequest(
       "post",
-      `/ledger/${walletId}/cardCapture`,
+      `/ledger/cards/${cardId}/capture`,
       { splits: splits },
       token
     );
 
-    console.log("✅ Mock card capture result:");
+    console.log("✅ Card capture result:");
     console.log(JSON.stringify(result, null, 2));
   } catch (err: any) {
     handleCliError(err);
