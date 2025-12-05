@@ -8,14 +8,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "simulate": "tsx scripts/run-simulation.ts",
-    "simulate:ci": "tsx scripts/run-simulation.ts --export ci-results.json",
-    "validate-results": "tsx scripts/validate-simulation-results.ts",
-    "test:e2e": "npm run simulate:ci && npm run validate-results ci-results.json",
-    "test:all-simulations": "./scripts/test-all-simulations.sh",
-    "test:synctera": "BAAS_PROVIDER=SYNCTERA tsx scripts/test-synctera-integration.ts",
-    "wipe:synctera": "tsx src/tests/scripts/synctera/wipeSandbox.ts",
-    "reset:all": "tsx scripts/reset-all.ts"
+    "wipe:synctera": "tsx src/tests/devscripts/wipeSandbox.ts",
+    "reset:all": "tsx src/tests/devscripts/reset-all.ts"
   },
   "keywords": [],
   "author": "",
