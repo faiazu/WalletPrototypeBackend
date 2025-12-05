@@ -11,8 +11,11 @@ export async function getMember(walletId: string, userId: string): Promise<Walle
 }
 
 export async function isMember(walletId: string, userId: string): Promise<boolean> {
+  console.error(`🔍 [isMember] Checking walletId="${walletId}", userId="${userId}"`);
   const member = await getMember(walletId, userId);
-  return Boolean(member);
+  const result = Boolean(member);
+  console.error(`${result ? '✅' : '❌'} [isMember] Member ${result ? 'found' : 'NOT found'}: ${member?.id || 'N/A'}`);
+  return result;
 }
 
 export async function addMember(walletId: string, userId: string, role: string = "member"): Promise<WalletMember> {

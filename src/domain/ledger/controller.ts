@@ -17,16 +17,28 @@ import {
  * Helper: Validate card membership through the card's wallet
  */
 async function isCardMember(cardId: string, userId: string): Promise<boolean> {
+  console.error(`🔍 [isCardMember] Checking if userId="${userId}" is member of card="${cardId}"`);
+  
   const card = await prisma.card.findUnique({
     where: { id: cardId },
     select: { walletId: true },
   });
   
-  if (!card || !card.walletId) {
+  if (!card) {
+    console.error(`❌ [isCardMember] Card not found: ${cardId}`);
     return false;
   }
   
-  return isMember(card.walletId, userId);
+  if (!card.walletId) {
+    console.error(`❌ [isCardMember] Card has no walletId: ${cardId}`);
+    return false;
+  }
+  
+  console.error(`🔍 [isCardMember] Card walletId="${card.walletId}", checking membership...`);
+  const result = await isMember(card.walletId, userId);
+  console.error(`${result ? '✅' : '❌'} [isCardMember] User ${result ? 'IS' : 'IS NOT'} a member`);
+  
+  return result;
 }
 
 /**
@@ -47,12 +59,18 @@ export const postCardDeposit = [
   async (req: Request, res: Response) => {
     try {
       const userId = req.userId!;
+      console.error(`📥 [postCardDeposit] Request from userId="${userId}"`); // Using console.error
+      
       const { cardId } = cardParamSchema.parse(req.params);
+      console.error(`📥 [postCardDeposit] CardId="${cardId}"`);
 
       // Validate card membership through wallet
       if (!(await isCardMember(cardId, userId))) {
+        console.error(`❌ [postCardDeposit] Authorization failed for userId="${userId}", cardId="${cardId}"`);
         return res.status(403).json({ error: "Not a card member" });
       }
+      
+      console.error(`✅ [postCardDeposit] Authorization passed for userId="${userId}", cardId="${cardId}"`);
 
       const { amount, metadata } = amountSchema.parse(req.body);
       const transactionId = `card_deposit_${cardId}_${userId}_${Date.now()}`;

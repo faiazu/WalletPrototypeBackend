@@ -22,6 +22,13 @@ export function registerWebhookRoutes(app: Application) {
 export function registerApiRoutes(app: Application) {
   app.use(express.json());
 
+  // Log all requests for debugging
+  app.use((req, res, next) => {
+    const timestamp = new Date().toISOString();
+    console.error(`[${timestamp}] ${req.method} ${req.path}`); // Using console.error to force output
+    next();
+  });
+
   app.use("/auth", authRoutes);
   app.use("/user", userRoutes);
   app.use("/wallet", walletRoutes);
