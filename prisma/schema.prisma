@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../src/generated/prisma"
 }
 
@@ -8,13 +8,54 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum BaasProviderName {
-  MOCK
-  STRIPE_ISSUING
-  LITHIC
-  UNIT
-  OTHER
+// ---------- Enums ----------
+enum Currency {
+  USD
+  CAD
+  EUR
+  GBP
+  AUD
+  INR
+}
+
+enum CardStatus {
+  PENDING_ACTIVATION
+  ACTIVE
+  INACTIVE
+  BLOCKED
+  EXPIRED
+  TERMINATED
+}
+
+enum CardType {
+  VIRTUAL
+  PHYSICAL
+}
+
+enum CardProvider {
   SYNCTERA
+}
+
+enum WalletRole {
+  ADMIN
+  MEMBER
+}
+
+enum LedgerScope {
+  CARD_POOL
+  CARD_MEMBER_EQUITY
+  CARD_PENDING_WITHDRAWAL
+}
+
+enum LedgerEntryKind {
+  DEPOSIT
+  WITHDRAWAL_HOLD
+  WITHDRAWAL_RELEASE
+  WITHDRAWAL_PAYOUT
+  CARD_AUTH
+  CARD_CLEARING
+  ADJUSTMENT
+  OTHER
 }
 
 enum AuthHoldStatus {
@@ -24,17 +65,12 @@ enum AuthHoldStatus {
   EXPIRED
 }
 
-enum WalletSpendPolicy {
-  PAYER_ONLY
-  EQUAL_SPLIT
-}
-
-enum WithdrawalRequestStatus {
-  PENDING
+enum WithdrawalStatus {
+  REQUESTED
+  APPROVED
   PROCESSING
   COMPLETED
   FAILED
-  CANCELLED
 }
 
 enum WithdrawalTransferStatus {
@@ -45,297 +81,246 @@ enum WithdrawalTransferStatus {
   REVERSED
 }
 
-enum LedgerScope {
-  WALLET_POOL // Legacy: Wallet-level shared pool
-  CARD_POOL // Card-level shared pool (primary)
-  CARD_MEMBER_EQUITY // Per-member equity tracking per card
-  CARD_PENDING_WITHDRAWAL // Pending withdrawal amounts per card
+enum WebhookEventType {
+  CARD_AUTH
+  CARD_CLEARING
+  CARD_STATUS
+  ACCOUNT_STATUS
+  KYC_VERIFICATION
+  OTHER
 }
 
+// ---------- Users ----------
 model User {
-  id             String          @id @default(uuid())
-  email          String          @unique
-  name           String?
-  googleId       String?         @unique
-  createdAt      DateTime        @default(now())
-  kycStatus      String?
+  id           String   @id @default(uuid())
+  email        String   @unique
+  fullName     String
+  phone        String?  @unique
+  passwordHash String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  verification   UserVerification?
+  walletsOwned   Wallet[]          @relation("WalletAdmin")
+  walletMembers  WalletMember[]
+  cardsHeld      Card[]            @relation("CardHolder")
+  accounts       Account[]
+  withdrawals    Withdrawal[]
+  cardAuthHolds  CardAuthHold[]
   ledgerAccounts LedgerAccount[]
-  walletsAdmin   Wallet[]        @relation("WalletAdmin")
-  memberships    WalletMember[]
-
-  baasCustomer       BaasCustomer?
-  baasCards          BaasCard[]
-  baasFundingRoutes  BaasFundingRoute[]
-  cardAuthHolds      CardAuthHold[]
-  baasAccounts       BaasAccount[]
-  withdrawalRequests WithdrawalRequest[]
 }
 
+model UserVerification {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  emailVerified Boolean  @default(false)
+  phoneVerified Boolean  @default(false)
+  kycStatus     String   @default("unverified")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------- Wallets ----------
 model Wallet {
-  id                         String              @id @default(uuid())
-  name                       String
-  adminId                    String
-  createdAt                  DateTime            @default(now())
-  providerFinancialAccountId String?
-  spendPolicy                WalletSpendPolicy   @default(PAYER_ONLY)
-  cards                      Card[]
-  ledgerAccounts             LedgerAccount[]
-  admin                      User                @relation("WalletAdmin", fields: [adminId], references: [id])
-  walletBalance              WalletBalance?
-  members                    WalletMember[]
-  baasCards                  BaasCard[]
-  baasFundingRoutes          BaasFundingRoute[]
-  cardAuthHolds              CardAuthHold[]
-  withdrawalRequests         WithdrawalRequest[]
-}
+  id          String   @id @default(uuid())
+  name        String
+  adminUserId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-model WalletBalance {
-  id        String   @id @default(uuid())
-  walletId  String   @unique
-  amount    Int      @default(0)
-  updatedAt DateTime @default(now()) @updatedAt
-  wallet    Wallet   @relation(fields: [walletId], references: [id])
+  admin          User            @relation("WalletAdmin", fields: [adminUserId], references: [id])
+  members        WalletMember[]
+  cards          Card[]
+  withdrawals    Withdrawal[]
+  ledgerAccounts LedgerAccount[]
+  cardAuthHolds  CardAuthHold[]
+
+  @@index([adminUserId])
 }
 
 model WalletMember {
-  id       String   @id @default(uuid())
+  id       String     @id @default(uuid())
   walletId String
   userId   String
-  role     String
-  joinedAt DateTime @default(now())
-  user     User     @relation(fields: [userId], references: [id])
-  wallet   Wallet   @relation(fields: [walletId], references: [id])
+  role     WalletRole @default(MEMBER)
+  joinedAt DateTime   @default(now())
+
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([walletId, userId])
+  @@index([walletId, role])
+}
+
+// ---------- Accounts & Cards ----------
+model Account {
+  id                 String   @id @default(uuid())
+  userId             String
+  cardId             String?  @unique
+  currency           Currency @default(USD)
+  cachedBalanceCents BigInt   @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  card    Card?           @relation("CardAccount")
+  ledgers LedgerAccount[]
 }
 
 model Card {
-  id             String    @id @default(uuid())
-  walletId       String
-  providerCardId String?
-  status         String    @default("ACTIVE")
-  terminatedAt   DateTime?
-  archivedAt     DateTime?
-  archivedReason String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                 String       @id @default(uuid())
+  walletId           String
+  accountId          String       @unique
+  holderUserId       String
+  status             CardStatus   @default(PENDING_ACTIVATION)
+  type               CardType     @default(VIRTUAL)
+  brand              String?
+  last4              String?
+  expMonth           Int?
+  expYear            Int?
+  nickname           String?
+  cardholderName     String?
+  provider           CardProvider @default(SYNCTERA)
+  providerCardId     String       @unique
+  providerAccountId  String
+  providerCustomerId String
+  widgetTypes        String[]
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  terminatedAt       DateTime?
+  archivedAt         DateTime?
+  archivedReason     String?
 
-  wallet             Wallet              @relation(fields: [walletId], references: [id])
-  baasAccount        BaasAccount?
-  ledgerAccounts     LedgerAccount[]
-  authHolds          CardAuthHold[]
-  archives           CardArchive[]
-  withdrawalRequests WithdrawalRequest[]
+  wallet  Wallet  @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  account Account @relation("CardAccount", fields: [accountId], references: [id], onDelete: Cascade)
+  holder  User    @relation("CardHolder", fields: [holderUserId], references: [id], onDelete: Cascade)
+
+  ledgerAccounts LedgerAccount[]
+  authHolds      CardAuthHold[]
+  withdrawals    Withdrawal[]
 }
 
+// ---------- Ledger ----------
 model LedgerAccount {
-  id          String       @id @default(uuid())
-  walletId    String
-  cardId      String? // Card-specific ledger accounts
-  userId      String? // For member equity tracking
-  type        String // Legacy: "pool", "equity", "pending_withdrawal"
-  ledgerScope LedgerScope? // New: CARD_POOL, CARD_MEMBER_EQUITY, etc.
-  balance     Int          @default(0)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id                 String      @id @default(uuid())
+  walletId           String?
+  cardId             String?
+  userId             String?
+  scope              LedgerScope
+  cachedBalanceCents BigInt      @default(0)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
-  user          User?         @relation(fields: [userId], references: [id])
-  wallet        Wallet        @relation(fields: [walletId], references: [id])
-  card          Card?         @relation(fields: [cardId], references: [id])
-  creditEntries LedgerEntry[] @relation("CreditRelation")
+  wallet Wallet? @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  card   Card?   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   debitEntries  LedgerEntry[] @relation("DebitRelation")
+  creditEntries LedgerEntry[] @relation("CreditRelation")
+  account       Account?      @relation(fields: [accountId], references: [id])
+  accountId     String?
 
-  @@unique([cardId, ledgerScope, userId]) // Unique per card + scope + member
+  @@unique([cardId, scope, userId])
   @@index([walletId, cardId])
 }
 
 model LedgerEntry {
-  id              String        @id @default(uuid())
+  id              String          @id @default(uuid())
   transactionId   String
+  kind            LedgerEntryKind @default(OTHER)
   debitAccountId  String
   creditAccountId String
-  amount          Int
-  timestamp       DateTime      @default(now())
+  amountCents     BigInt
+  currency        Currency        @default(USD)
+  description     String?
   metadata        Json?
-  creditAccount   LedgerAccount @relation("CreditRelation", fields: [creditAccountId], references: [id])
-  debitAccount    LedgerAccount @relation("DebitRelation", fields: [debitAccountId], references: [id])
+  createdAt       DateTime        @default(now())
+
+  debitAccount  LedgerAccount @relation("DebitRelation", fields: [debitAccountId], references: [id])
+  creditAccount LedgerAccount @relation("CreditRelation", fields: [creditAccountId], references: [id])
+
+  @@index([transactionId])
 }
 
-model BaasCustomer {
-  id                 String           @id @default(cuid())
-  userId             String           @unique
-  providerName       BaasProviderName
-  externalCustomerId String           @unique
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-
-  user     User          @relation(fields: [userId], references: [id])
-  accounts BaasAccount[]
-  cards    BaasCard[]
-}
-
-model BaasAccount {
-  id                 String           @id @default(cuid())
-  userId             String
-  cardId             String           @unique // 1:1 with Card - each card owns its account
-  baasCustomerId     String?
-  providerName       BaasProviderName
-  externalAccountId  String           @unique
-  accountType        String
-  currency           String
-  status             String           @default("ACTIVE")
-  accessStatus       String?
-  accountNumberLast4 String?
-  routingNumber      String?
-  metadata           Json?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-
-  user          User               @relation(fields: [userId], references: [id])
-  card          Card               @relation(fields: [cardId], references: [id])
-  baasCustomer  BaasCustomer?      @relation(fields: [baasCustomerId], references: [id])
-  baasCards     BaasCard[]
-  fundingRoutes BaasFundingRoute[]
-}
-
-model BaasCard {
-  id             String           @id @default(cuid())
-  userId         String
-  walletId       String? // optional link to a "default" wallet for this card
-  baasCustomerId String?
-  baasAccountId  String?
-  providerName   BaasProviderName
-  externalCardId String           @unique
-  last4          String?
-  status         String           @default("ACTIVE")
-  nickname       String?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-
-  user         User          @relation(fields: [userId], references: [id])
-  wallet       Wallet?       @relation(fields: [walletId], references: [id])
-  baasCustomer BaasCustomer? @relation(fields: [baasCustomerId], references: [id])
-  baasAccount  BaasAccount?  @relation(fields: [baasAccountId], references: [id])
-}
-
-model BaasEvent {
-  id              String           @id @default(cuid())
-  providerName    BaasProviderName
-  providerEventId String
-  type            String // e.g. "CARD_AUTH", "CARD_CLEARING", "WALLET_FUNDING"
-  payload         Json
-  processedAt     DateTime?
-  createdAt       DateTime         @default(now())
-
-  @@unique([providerName, providerEventId])
-}
-
-model BaasFundingRoute {
-  id                String           @id @default(cuid())
-  providerName      BaasProviderName
-  providerAccountId String
-  reference         String?
-  walletId          String
-  userId            String
-  cardId            String?          // Which card this funding route is for
-  baasAccountId     String?
-  createdAt         DateTime         @default(now())
-
-  wallet      Wallet       @relation(fields: [walletId], references: [id])
-  user        User         @relation(fields: [userId], references: [id])
-  baasAccount BaasAccount? @relation(fields: [baasAccountId], references: [id])
-
-  @@unique([providerName, providerAccountId, reference])
-  @@index([cardId])
-}
-
+// ---------- Holds & Withdrawals ----------
 model CardAuthHold {
-  id             String           @id @default(cuid())
-  providerName   BaasProviderName
-  providerAuthId String
-  providerCardId String
-  cardId         String // Link to internal Card model
+  id             String         @id @default(uuid())
+  cardId         String
   walletId       String
   userId         String
+  providerName   CardProvider   @default(SYNCTERA)
+  providerAuthId String
+  providerCardId String
   amountMinor    Int
-  currency       String
-  status         AuthHoldStatus   @default(PENDING)
+  currency       Currency       @default(USD)
+  status         AuthHoldStatus @default(PENDING)
   metadata       Json?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
   clearedAt      DateTime?
   reversedAt     DateTime?
 
-  card   Card   @relation(fields: [cardId], references: [id])
-  wallet Wallet @relation(fields: [walletId], references: [id])
-  user   User   @relation(fields: [userId], references: [id])
+  card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([providerName, providerAuthId])
   @@index([cardId, status])
 }
 
-model WithdrawalRequest {
-  id                  String                  @id @default(cuid())
-  walletId            String
-  cardId              String // Which card to withdraw from
-  userId              String
-  amountMinor         Int
-  currency            String                  @default("USD")
-  status              WithdrawalRequestStatus @default(PENDING)
-  ledgerTransactionId String? // Link to ledger transaction
-  failureReason       String?
-  metadata            Json?
-  createdAt           DateTime                @default(now())
-  updatedAt           DateTime                @updatedAt
-  completedAt         DateTime?
-  failedAt            DateTime?
+model Withdrawal {
+  id            String           @id @default(uuid())
+  walletId      String
+  cardId        String
+  userId        String
+  amountMinor   Int
+  currency      Currency         @default(USD)
+  status        WithdrawalStatus @default(REQUESTED)
+  failureReason String?
+  metadata      Json?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  completedAt   DateTime?
 
-  wallet    Wallet               @relation(fields: [walletId], references: [id])
-  user      User                 @relation(fields: [userId], references: [id])
-  card      Card                 @relation(fields: [cardId], references: [id])
+  wallet    Wallet               @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  card      Card                 @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   transfers WithdrawalTransfer[]
 
   @@index([walletId, status])
-  @@index([userId, status])
   @@index([cardId, status])
+  @@index([userId, status])
 }
 
 model WithdrawalTransfer {
-  id                  String                   @id @default(cuid())
-  withdrawalRequestId String
-  providerName        BaasProviderName
-  providerTransferId  String? // External payout/transfer ID
-  amountMinor         Int
-  currency            String                   @default("USD")
-  status              WithdrawalTransferStatus @default(PENDING)
-  failureReason       String?
-  metadata            Json?
-  createdAt           DateTime                 @default(now())
-  updatedAt           DateTime                 @updatedAt
-  completedAt         DateTime?
-  failedAt            DateTime?
+  id                 String                   @id @default(uuid())
+  withdrawalId       String
+  providerTransferId String?                  @unique
+  status             WithdrawalTransferStatus @default(PENDING)
+  amountMinor        Int?
+  currency           Currency                 @default(USD)
+  metadata           Json?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  completedAt        DateTime?
 
-  withdrawalRequest WithdrawalRequest @relation(fields: [withdrawalRequestId], references: [id])
+  withdrawal Withdrawal @relation(fields: [withdrawalId], references: [id], onDelete: Cascade)
 
-  @@unique([providerName, providerTransferId])
-  @@index([withdrawalRequestId])
+  @@index([withdrawalId])
   @@index([status])
 }
 
-model CardArchive {
-  id                String   @id @default(cuid())
-  cardId            String
-  walletId          String
-  userId            String // Owner at time of termination
-  externalAccountId String? // Synctera account ID
-  externalCardId    String? // Synctera card ID
-  balanceSnapshot   Json // { poolBalance, memberEquities: [{userId, balance}], pendingWithdrawals }
-  terminatedAt      DateTime
-  archivedAt        DateTime @default(now())
-  reason            String?
-  metadata          Json?
+// ---------- Webhooks ----------
+model WebhookEventLog {
+  id              String           @id @default(uuid())
+  provider        CardProvider     @default(SYNCTERA)
+  eventType       WebhookEventType
+  providerEventId String
+  payload         Json
+  processedAt     DateTime?
+  createdAt       DateTime         @default(now())
 
-  card Card @relation(fields: [cardId], references: [id])
-
-  @@index([cardId])
-  @@index([walletId])
-  @@index([userId])
+  @@unique([provider, providerEventId])
 }

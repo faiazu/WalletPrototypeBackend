@@ -1,21 +1,14 @@
 import { z } from "zod";
 
-export const issueCardParamsSchema = z.object({
-  walletId: z.string().min(1),
+export const createCardSchema = z.object({
+  holderUserId: z.string().uuid(),
+  type: z.enum(["VIRTUAL", "PHYSICAL"]),
+  brand: z.string().optional(),
+  cardholderName: z.string().min(1),
+  currency: z.enum(["USD", "EUR", "GBP", "CAD", "AUD", "INR"]).default("CAD"),
+  last4: z.string().length(4),
+  expMonth: z.number().int().min(1).max(12),
+  expYear: z.number().int().min(new Date().getFullYear()).max(2100),
+  widgetTypes: z.array(z.string()).default(["activate_card", "set_pin"]),
 });
 
-export const issueCardBodySchema = z.object({
-  nickname: z.string().trim().min(1).max(64).optional(),
-});
-
-export const widgetQuerySchema = z.object({
-  widgetType: z.enum(["activate_card", "set_pin"]).optional(),
-});
-
-export const updateCardStatusSchema = z.object({
-  status: z.enum(["ACTIVE", "LOCKED", "CANCELED", "SUSPENDED"]).optional(),
-});
-
-export const updateCardNicknameSchema = z.object({
-  nickname: z.string().trim().min(1).max(64),
-});

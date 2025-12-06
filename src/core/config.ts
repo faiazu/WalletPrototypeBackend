@@ -1,31 +1,31 @@
 import dotenv from "dotenv";
+import { z } from "zod";
 
 dotenv.config();
 
-export type BaasProvider = "MOCK" | "STRIPE_ISSUING" | "SYNCTERA";
+const EnvSchema = z.object({
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  DATABASE_URL: z.string().url(),
+  JWT_SECRET: z.string(),
+  LOG_LEVEL: z.string().default("info"),
 
-const baasProviderEnv = process.env.BAAS_PROVIDER?.toUpperCase() as BaasProvider | undefined;
+  // Synctera
+  SYNCTERA_API_KEY: z.string(),
+  SYNCTERA_BASE_URL: z.string().url(),
+  SYNCTERA_WEBHOOK_SECRET: z.string(),
+  SYNCTERA_ACCOUNT_TEMPLATE_ID: z.string(),
+  SYNCTERA_CARD_PRODUCT_ID: z.string(),
+  SYNCTERA_ACCOUNT_CURRENCY: z.string().default("USD"),
+});
 
-export const config = {
-  env: process.env.NODE_ENV || "development",
-  databaseUrl: process.env.DATABASE_URL,
-  baasProvider: baasProviderEnv || "MOCK",
-  stripe: {
-    apiKey: process.env.STRIPE_API_KEY,
-    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
-  },
-  synctera: {
-    apiKey: process.env.SYNCTERA_API_KEY,
-    baseUrl: process.env.SYNCTERA_BASE_URL || "https://api-sandbox.synctera.com/v0",
-    webhookSecret: process.env.SYNCTERA_WEBHOOK_SECRET,
-    accountTemplateId: process.env.SYNCTERA_ACCOUNT_TEMPLATE_ID,
-    cardProductId: process.env.SYNCTERA_CARD_PRODUCT_ID,
-    defaultAccountCurrency: process.env.SYNCTERA_ACCOUNT_CURRENCY || "CAD",
-  },
-};
+const parsed = EnvSchema.safeParse(process.env);
 
-if (!config.databaseUrl) {
-  console.warn("[config] DATABASE_URL is not set. Prisma may fail to connect.");
+if (!parsed.success) {
+  console.error("[config] Invalid environment configuration", parsed.error.flatten().fieldErrors);
+  throw new Error("Invalid environment configuration. Check required env vars.");
 }
 
-console.log(`[config] Loaded environment: env=${config.env}, baasProvider=${config.baasProvider}`);
+export type AppConfig = z.infer<typeof EnvSchema>;
+export const config: AppConfig = parsed.data;
+
+console.log(`[config] Loaded environment: env=${config.NODE_ENV}, logLevel=${config.LOG_LEVEL}`);

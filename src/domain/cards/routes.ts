@@ -1,28 +1,10 @@
 import { Router } from "express";
-
-import {
-  getCardDetails,
-  getWidgetUrl,
-  issueCard,
-  postClientToken,
-  postSingleUseToken,
-  terminateCard,
-  updateCardNickname,
-  updateCardStatus,
-} from "./controller.js";
-import { walletCardsRoutes } from "./routes.wallet.js";
-import { authMiddleware } from "../../core/authMiddleware.js";
+import { createCardHandler, listCardsHandler } from "./controller.js";
 
 const router = Router();
 
-router.post("/wallets/:walletId/cards", issueCard);
-router.get("/cards/:cardId/widget-url", getWidgetUrl);
-router.post("/cards/:cardId/client-token", postClientToken);
-router.post("/cards/:cardId/single-use-token", postSingleUseToken);
-router.use("/wallets/:walletId/cards", walletCardsRoutes);
-router.get("/cards/:cardId", authMiddleware, getCardDetails);
-router.patch("/cards/:cardId/status", authMiddleware, updateCardStatus);
-router.patch("/cards/:cardId/nickname", authMiddleware, updateCardNickname);
-router.post("/cards/:cardId/terminate", authMiddleware, terminateCard);
+router.post("/wallets/:walletId/cards", createCardHandler);
+router.get("/wallets/:walletId/cards", listCardsHandler);
 
 export { router as cardRoutes };
+

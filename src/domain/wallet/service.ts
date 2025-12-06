@@ -1,69 +1,119 @@
 import { prisma } from "../../core/db.js";
-import { initializeLedgerForWallet } from "../ledger/initLedger.js";
+import { WalletRole } from "../../generated/prisma/client.js";
 
-export const walletService = {
-  async createWallet({
-    name,
-    adminUserId,
-  }: {
+export type WalletSummary = {
+  wallet: {
+    id: string;
     name: string;
     adminUserId: string;
-  }) {
-    // Ensure admin user exists to avoid FK violations
-    const admin = await prisma.user.findUnique({ where: { id: adminUserId } });
-    if (!admin) {
-      throw new Error("AdminUserNotFound");
-    }
+    createdAt: Date;
+    updatedAt: Date;
+  };
+  role: WalletRole;
+};
 
-    return prisma.$transaction(async (tx) => {
-      const wallet = await tx.wallet.create({
-        data: {
-          name,
-          adminId: adminUserId,
-        },
-      });
+async function userExists(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    throw new Error("UserNotFound");
+  }
+  return user;
+}
 
-      await tx.walletMember.create({
-        data: {
-          walletId: wallet.id,
-          userId: adminUserId,
-          role: "admin",
-        },
-      });
+export async function createWallet(name: string, adminUserId: string) {
+  await userExists(adminUserId);
 
-      const ledger = await initializeLedgerForWallet(tx, wallet.id, adminUserId);
-
-      return { wallet, ledger };
+  return prisma.$transaction(async (tx) => {
+    const wallet = await tx.wallet.create({
+      data: {
+        name,
+        adminUserId,
+      },
     });
-  },
 
-  async getWalletById(walletId: string) {
-    return prisma.wallet.findUnique({
-      where: { id: walletId },
-    });
-  },
-
-  async getWalletDetails(walletId: string) {
-    const wallet = await prisma.wallet.findUnique({
-      where: { id: walletId },
-      include: {
-        members: {
-          include: { user: true },
-        },
-        ledgerAccounts: true,
+    await tx.walletMember.create({
+      data: {
+        walletId: wallet.id,
+        userId: adminUserId,
+        role: WalletRole.ADMIN,
       },
     });
 
     return wallet;
-  },
+  });
+}
 
-  async isWalletAdmin(walletId: string, userId: string) {
-    const wallet = await prisma.wallet.findUnique({
-      where: { id: walletId },
-    });
+export async function listWalletsForUser(userId: string): Promise<WalletSummary[]> {
+  const memberships = await prisma.walletMember.findMany({
+    where: { userId },
+    include: {
+      wallet: true,
+    },
+    orderBy: { joinedAt: "asc" },
+  });
 
-    if (!wallet) return false;
-    return wallet.adminId === userId;
-  },
-};
+  return memberships.map((membership) => ({
+    wallet: membership.wallet!,
+    role: membership.role,
+  }));
+}
+
+export async function getWalletById(walletId: string) {
+  return prisma.wallet.findUnique({
+    where: { id: walletId },
+  });
+}
+
+export async function getWalletDetails(walletId: string) {
+  return prisma.wallet.findUnique({
+    where: { id: walletId },
+    include: {
+      members: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              fullName: true,
+              phone: true,
+            },
+          },
+        },
+        orderBy: { joinedAt: "asc" },
+      },
+      cards: true,
+    },
+  });
+}
+
+export async function isWalletAdmin(walletId: string, userId: string) {
+  const wallet = await prisma.wallet.findUnique({ where: { id: walletId } });
+  if (!wallet) return false;
+  return wallet.adminUserId === userId;
+}
+
+export async function isWalletMember(walletId: string, userId: string) {
+  const membership = await prisma.walletMember.findUnique({
+    where: {
+      walletId_userId: {
+        walletId,
+        userId,
+      },
+    },
+  });
+
+  return Boolean(membership);
+}
+
+export async function addWalletMember(walletId: string, userId: string, role: WalletRole) {
+  await userExists(userId);
+
+  return prisma.walletMember.create({
+    data: {
+      walletId,
+      userId,
+      role,
+    },
+  });
+}
 
